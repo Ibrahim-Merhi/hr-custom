@@ -1,0 +1,3 @@
+[pre_model_sync]
+hr_custom.patches.v1_0.create_custom_fields.execute
+

@@ -1,0 +1,14 @@
+[project]
+name = "hr_custom"
+version = "0.1.0"
+description = "GPS mobile attendance extension for Frappe/HRMS v15"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.frappe]
+required-apps = ["erpnext", "hrms"]
+
