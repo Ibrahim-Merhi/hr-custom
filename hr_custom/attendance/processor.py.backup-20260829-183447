@@ -1,0 +1,14 @@
+import frappe
+
+
+def process_pending_attendance():
+    settings = frappe.get_single("HR Mobile Attendance Settings")
+    if settings.enable_attendance_processor and settings.auto_create_attendance:
+        from hrms.hr.doctype.shift_type.shift_type import process_auto_attendance_for_all_shifts
+        process_auto_attendance_for_all_shifts()
+    from hr_custom.attendance.exceptions import scan_recent_checkins
+    scan_recent_checkins()
+
+
+def finalize_previous_day():
+    process_pending_attendance()
