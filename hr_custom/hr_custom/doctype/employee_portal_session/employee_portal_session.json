@@ -3,11 +3,10 @@
  "name":"Employee Portal Session",
  "module":"HR Custom",
  "autoname":"hash",
- "field_order":["credential","token_hash","expires_on","revoked","last_seen","ip_address","user_agent"],
+ "field_order":["credential","token_hash","revoked","last_seen","ip_address","user_agent"],
  "fields":[
   {"fieldname":"credential","label":"Portal Credential","fieldtype":"Link","options":"Employee Portal Credential","reqd":1,"index":1},
   {"fieldname":"token_hash","label":"Token Hash","fieldtype":"Data","reqd":1,"unique":1,"hidden":1},
-  {"fieldname":"expires_on","label":"Expires On","fieldtype":"Datetime","reqd":1,"index":1},
   {"fieldname":"revoked","label":"Revoked","fieldtype":"Check","default":"0","index":1},
   {"fieldname":"last_seen","label":"Last Seen","fieldtype":"Datetime","read_only":1},
   {"fieldname":"ip_address","label":"IP Address","fieldtype":"Data","read_only":1},

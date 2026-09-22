@@ -29,14 +29,14 @@ def get_portal_session(required=False):
 	if token:
 		row = frappe.db.get_value(
 			"Employee Portal Session",
-			{"token_hash": token_hash(token), "revoked": 0, "expires_on": [">", now_datetime()]},
-			["name", "credential", "expires_on", "last_seen"], as_dict=True,
+			{"token_hash": token_hash(token), "revoked": 0},
+			["name", "credential", "last_seen"], as_dict=True,
 		)
 		if row and not frappe.db.get_value("Employee Portal Credential", row.credential, "enabled"):
 			row = None
 	if not row:
 		if required:
-			frappe.throw(_("Your portal session has expired. Please sign in again."), frappe.AuthenticationError)
+			frappe.throw(_("Your portal session is no longer active. Please sign in again."), frappe.AuthenticationError)
 		return None
 	frappe.local.employee_portal_session = row
 	if not row.last_seen or (now_datetime() - get_datetime(row.last_seen)).total_seconds() > 300:

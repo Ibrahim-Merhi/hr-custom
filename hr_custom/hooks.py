@@ -40,7 +40,7 @@ doc_events={
 # HRMS owns auto-attendance. This scheduler only creates custom exception alerts.
 scheduler_events={
     "hourly":["hr_custom.attendance.exceptions.scan_recent_checkins", "hr_custom.services.portal_attendance_processing.reconcile_recent_completed_pairs"],
-    "daily":["hr_custom.api.portal_auth.cleanup_expired_sessions"],
+    "daily":["hr_custom.api.portal_auth.cleanup_revoked_sessions"],
 }
 website_route_rules=[{"from_route":"/attendance","to_route":"mobile-attendance"}]
 permission_query_conditions={

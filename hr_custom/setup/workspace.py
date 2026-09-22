@@ -30,6 +30,9 @@ GROUPS = [
         ("HR Mobile Attendance Settings", "DocType", "HR Mobile Attendance Settings", "Grey"),
         ("Employee Attendance Device", "DocType", "Employee Attendance Device", "Grey"),
     ]),
+    ("Portal Access", [
+        ("Employee Portal Credential", "DocType", "Employee Portal Credential", "Green"),
+    ]),
 ]
 LABELS = {item[0] for _, items in GROUPS for item in items} | {"Mobile Attendance", "HR Attendance Dashboard", "Daily Attendance Overview"}
 
