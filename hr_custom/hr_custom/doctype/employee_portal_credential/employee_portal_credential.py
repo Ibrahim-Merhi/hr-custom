@@ -12,9 +12,11 @@ PORTAL_ROLES = {"Employee", "Leave Approver", "HR"}
 
 class EmployeePortalCredential(Document):
 	def validate(self):
+		if self.employee and not self.username:
+			self.username = frappe.db.get_value("Employee", self.employee, "attendance_device_id")
 		self.username = (self.username or "").strip()
 		if not self.username:
-			frappe.throw(_("Portal Username is required."))
+			frappe.throw(_("The selected Employee must have an Attendance Device ID before portal credentials can be created."))
 		if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{2,79}", self.username):
 			frappe.throw(_("Portal Username must be 3-80 characters and may contain letters, numbers, dots, underscores and hyphens."))
 		if self.password and not self.is_dummy_password(self.password):

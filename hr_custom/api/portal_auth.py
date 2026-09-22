@@ -71,6 +71,8 @@ def login(username=None, password=None):
 
 	raw_token = secrets.token_urlsafe(32)
 	request = getattr(frappe.local, "request", None)
+	forwarded_proto = request.headers.get("X-Forwarded-Proto", "") if request else ""
+	secure_cookie = bool(request and (request.scheme == "https" or forwarded_proto.split(",", 1)[0].strip() == "https"))
 	frappe.get_doc({
 		"doctype": "Employee Portal Session", "credential": credential.name,
 		"token_hash": token_hash(raw_token),
@@ -81,7 +83,9 @@ def login(username=None, password=None):
 		# A long-lived persistent cookie keeps users signed in across browser and
 		# device restarts. Server-side revocation remains authoritative.
 		PORTAL_COOKIE, raw_token, max_age=10 * 365 * 24 * 60 * 60,
-		httponly=True, secure=True, samesite="Strict",
+		# Secure is mandatory on HTTPS. Allowing a non-Secure cookie only when the
+		# actual external request is HTTP keeps isolated development VMs usable.
+		httponly=True, secure=secure_cookie, samesite="Strict",
 	)
 	frappe.db.set_value("Employee Portal Credential", credential.name, "last_login", now_datetime(), update_modified=False)
 	return {"authenticated": True, "employee": credential.employee, "roles": sorted(row.portal_role for row in credential.roles)}
