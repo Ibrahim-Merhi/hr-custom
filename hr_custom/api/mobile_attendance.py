@@ -4,6 +4,7 @@ from frappe.utils import add_days, add_months, cint, flt, get_datetime, getdate,
 
 from hr_custom.attendance.compat import supported_values
 from hr_custom.attendance.geofence import get_distance_in_meters, validate_coordinates
+from hr_custom.services.portal_identity import get_portal_employee
 
 LOGGER = frappe.logger("hr_mobile_attendance")
 
@@ -19,18 +20,10 @@ def _settings():
 
 
 def _employee_for_user():
-    if frappe.session.user == "Guest":
-        frappe.throw(_("Please log in to use mobile attendance."), frappe.PermissionError)
-    fields = ["name", "employee_name", "branch", "company", "department", "employment_type", "default_shift"]
-    if frappe.get_meta("Employee").has_field("custom_location_not_required"):
-        fields.append("custom_location_not_required")
-    rows = frappe.get_all("Employee", filters={"user_id": frappe.session.user, "status": "Active"}, fields=fields, limit=2)
-    if not rows:
-        frappe.throw(_("No active Employee is linked to your user account."), frappe.PermissionError)
-    if len(rows) > 1:
-        LOGGER.error("Multiple active employees mapped to user %s", frappe.session.user)
-        frappe.throw(_("Multiple active Employees are linked to your user account. Please contact HR."))
-    return rows[0]
+	fields = ["name", "employee_name", "branch", "company", "department", "employment_type", "default_shift"]
+	if frappe.get_meta("Employee").has_field("custom_location_not_required"):
+		fields.append("custom_location_not_required")
+	return get_portal_employee(fields=fields)
 
 
 def _allowed_branches(employee, settings):
@@ -247,8 +240,9 @@ def get_leave_portal_data():
 
 def _can_review_leave(doc, user):
     from hr_custom.services.simple_leave import _is_hr_manager
-    own_employee = frappe.db.get_value("Employee", {"user_id": user, "status": "Active"}, "name")
-    return doc.employee == own_employee or doc.custom_current_approver == user or _is_hr_manager(user)
+    from hr_custom.services.portal_identity import get_effective_approval_user
+    own_employee = _employee_for_user().name
+    return doc.employee == own_employee or doc.custom_current_approver == get_effective_approval_user(user) or _is_hr_manager(user)
 
 
 @frappe.whitelist()
@@ -269,8 +263,9 @@ def get_portal_leave_detail(name):
 @frappe.whitelist()
 def get_leave_approval_queue():
     from hr_custom.services.simple_leave import _is_hr_manager
-    user = frappe.session.user
-    is_hr = _is_hr_manager(user)
+    from hr_custom.services.portal_identity import get_effective_approval_user, has_portal_role
+    user = get_effective_approval_user()
+    is_hr = _is_hr_manager()
     fields = ["name", "employee", "employee_name", "leave_type", "from_date", "to_date", "total_leave_days", "description", "status", "custom_approval_stage", "creation"]
     rows = frappe.get_all("Leave Application", filters={"docstatus": 0, "custom_approval_stage": "Pending Approver Approval", "custom_current_approver": user}, fields=fields, order_by="creation asc", limit=100)
     for row in rows:
@@ -281,7 +276,7 @@ def get_leave_approval_queue():
             row.review_mode = "hr"
         rows.extend(final_rows)
         rows.sort(key=lambda row: row.creation)
-    configured = frappe.db.exists("Employee Leave Approver", {"approver": user, "enabled": 1})
+    configured = has_portal_role("Leave Approver") and frappe.db.exists("Employee Leave Approver", {"approver": user, "enabled": 1})
     return {"items": rows, "can_review": bool(is_hr or configured)}
 
 

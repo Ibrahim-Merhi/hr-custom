@@ -19,10 +19,12 @@ class AttendanceCorrectionRequest(Document):
 
     def validate(self):
         roles = set(frappe.get_roles())
-        if not HR_ROLES.intersection(roles):
+        from hr_custom.services.portal_identity import get_portal_credential, has_portal_role
+        if not HR_ROLES.intersection(roles) and not has_portal_role("HR"):
             if not frappe.db.get_single_value("HR Mobile Attendance Settings", "allow_employee_correction_request"):
                 frappe.throw(_("Employee correction requests are disabled."))
-            own = frappe.db.get_value("Employee", {"user_id": frappe.session.user, "status": "Active"}, "name")
+            credential = get_portal_credential()
+            own = credential.employee if credential else None
             if not own or self.employee != own:
                 frappe.throw(_("You may only request a correction for yourself."), frappe.PermissionError)
         for value in (self.requested_check_in_time, self.requested_check_out_time):
@@ -44,7 +46,8 @@ class AttendanceCorrectionRequest(Document):
 
 
 def _require_hr():
-    if not HR_ROLES.intersection(frappe.get_roles()):
+    from hr_custom.services.portal_identity import has_portal_role
+    if not HR_ROLES.intersection(frappe.get_roles()) and not has_portal_role("HR"):
         frappe.throw(_("Only HR Manager or System Manager can perform this action."), frappe.PermissionError)
 
 

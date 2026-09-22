@@ -80,7 +80,7 @@ frappe.ready(() => {
 		"Final HR approval": "الموافقة النهائية للموارد البشرية", "This final action will submit and apply the attendance correction. Continue?": "سيؤدي هذا الإجراء النهائي إلى اعتماد وتطبيق تصحيح الحضور. هل تريد المتابعة؟",
 		"Sent to HR": "تم الإرسال إلى الموارد البشرية", "The approver step is complete. The request is still unsubmitted and is now waiting for final HR approval.": "اكتملت خطوة المعتمد. ما زال الطلب غير معتمد وهو الآن بانتظار الموافقة النهائية للموارد البشرية.",
 		"Reject leave request?": "رفض طلب الإجازة؟", "This decision will end the approval process.": "سيؤدي هذا القرار إلى إنهاء مسار الموافقة.",
-		"Signing in…": "جارٍ تسجيل الدخول…", "Sign In": "تسجيل الدخول", "Invalid username or password.": "اسم المستخدم أو كلمة المرور غير صحيحة.",
+		"Signing in…": "جارٍ تسجيل الدخول…", "Sign In": "تسجيل الدخول", "Invalid username or password.": "اسم المستخدم أو كلمة المرور غير صحيحة.", "Invalid portal username or password.": "اسم مستخدم البوابة أو كلمة المرور غير صحيحة.",
 		"Show password": "إظهار كلمة المرور", "Hide password": "إخفاء كلمة المرور", "Could not change language": "تعذر تغيير اللغة",
 		"Use your browser menu and select Install app or Add to Home screen.": "استخدم قائمة المتصفح واختر تثبيت التطبيق أو الإضافة إلى الشاشة الرئيسية.",
 		"{0} calendar day(s), {1} holiday/non-working day(s) excluded · {2}": "{0} يوم تقويمي، مع استثناء {1} يوم عطلة أو يوم غير عامل · {2}",
@@ -753,12 +753,12 @@ frappe.ready(() => {
 			const button = byId("login-button");
 			button.disabled = true; setText("login-button", __("Signing in…")); feedback("");
 			try {
-				const body = new URLSearchParams({usr: byId("login-email").value.trim(), pwd: byId("login-password").value});
-				const response = await fetch("/api/method/login", {method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", Accept: "application/json"}, body});
+				const body = new URLSearchParams({username: byId("login-username").value.trim(), password: byId("login-password").value});
+				const response = await fetch("/api/method/hr_custom.api.portal_auth.login", {method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", Accept: "application/json"}, body});
 				const data = await response.json();
-				if (!response.ok || !["Logged In", "No App"].includes(data.message)) throw new Error(data.message || __("Invalid username or password."));
+				if (!response.ok || !data.message?.authenticated) throw new Error(data.message || __("Invalid portal username or password."));
 				localStorage.setItem("hr_attendance_logged_in", "1"); location.replace(`/attendance?login=${Date.now()}`);
-			} catch (error) { button.disabled = false; setText("login-button", __("Sign In")); feedback(error.message || __("Invalid username or password."), "error"); }
+			} catch (error) { button.disabled = false; setText("login-button", __("Sign In")); feedback(error.message || __("Invalid portal username or password."), "error"); }
 		});
 		return;
 	}

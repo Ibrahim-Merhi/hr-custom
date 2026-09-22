@@ -195,8 +195,9 @@ def get_correction_detail(name):
     from hr_custom.services.simple_leave import _is_hr_manager
 
     doc = frappe.get_doc("Attendance Correction Request", name)
-    own_employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user, "status": "Active"}, "name")
-    if doc.employee != own_employee and doc.current_approver != frappe.session.user and not _is_hr_manager():
+    from hr_custom.services.portal_identity import get_effective_approval_user
+    own_employee = _employee_for_user().name
+    if doc.employee != own_employee and doc.current_approver != get_effective_approval_user() and not _is_hr_manager():
         frappe.throw(_("You are not permitted to view this correction request."), frappe.PermissionError)
     return {
         "name": doc.name, "employee": doc.employee, "employee_name": doc.employee_name,
@@ -212,9 +213,10 @@ def get_correction_detail(name):
 @frappe.whitelist()
 def get_correction_approval_queue():
     from hr_custom.services.simple_leave import _is_hr_manager
+    from hr_custom.services.portal_identity import get_effective_approval_user, has_portal_role
 
-    user = frappe.session.user
-    is_hr = _is_hr_manager(user)
+    user = get_effective_approval_user()
+    is_hr = _is_hr_manager()
     fields = ["name", "employee", "employee_name", "attendance_date", "request_type", "reason", "approval_stage", "current_approver", "creation"]
     rows = frappe.get_all("Attendance Correction Request", filters={"docstatus": ["<", 2], "approval_stage": "Pending Approver Approval", "current_approver": user}, fields=fields, order_by="creation asc")
     for row in rows:
@@ -225,5 +227,5 @@ def get_correction_approval_queue():
             if row.name not in existing:
                 row.review_mode = "hr_override" if row.approval_stage == "Pending Approver Approval" else "hr"
                 rows.append(row)
-    configured = frappe.db.exists("Employee Leave Approver", {"approver": user, "enabled": 1})
+    configured = has_portal_role("Leave Approver") and frappe.db.exists("Employee Leave Approver", {"approver": user, "enabled": 1})
     return {"items": rows, "can_review": bool(is_hr or configured)}

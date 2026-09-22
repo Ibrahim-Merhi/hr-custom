@@ -4,6 +4,7 @@ from frappe.share import add_docshare
 from frappe.utils import now_datetime
 
 from hr_custom.services.simple_leave import _hr_managers, _is_hr_manager, get_employee_approvers
+from hr_custom.services.portal_identity import get_effective_approval_user
 
 
 def initialize_correction_approval(doc):
@@ -82,8 +83,8 @@ def notify_current_reviewer(doc):
 
 
 def get_correction_context(doc):
-    user = frappe.session.user
-    is_hr = _is_hr_manager(user)
+    user = get_effective_approval_user()
+    is_hr = _is_hr_manager()
     is_current = doc.approval_stage == "Pending Approver Approval" and doc.current_approver == user
     return {
         "can_act": bool(doc.docstatus < 2 and doc.approval_stage in ("Pending Approver Approval", "Pending HR Approval") and (is_current or is_hr)),
@@ -102,8 +103,8 @@ def process_correction_approval(name, action, remarks=None):
     if doc.docstatus == 2 or doc.approval_stage not in ("Pending Approver Approval", "Pending HR Approval"):
         frappe.throw(_("This correction request is no longer waiting for approval."))
 
-    user = frappe.session.user
-    is_hr = _is_hr_manager(user)
+    user = get_effective_approval_user()
+    is_hr = _is_hr_manager()
     is_current_approver = doc.approval_stage == "Pending Approver Approval" and doc.current_approver == user
     # A configured approver acts in the approver capacity first, even when that
     # user also has an HR role. Final HR approval is a separate second action.

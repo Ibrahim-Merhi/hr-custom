@@ -4,10 +4,17 @@ HR_ROLES = {"HR User", "HR Manager", "System Manager"}
 
 
 def _is_hr(user):
+    from hr_custom.services.portal_identity import has_portal_role
+    if has_portal_role("HR", user):
+        return True
     return bool(HR_ROLES.intersection(frappe.get_roles(user)))
 
 
 def employee_for_user(user=None):
+    from hr_custom.services.portal_identity import get_portal_credential
+    credential = get_portal_credential(user)
+    if credential:
+        return credential.employee
     return frappe.db.get_value("Employee", {"user_id": user or frappe.session.user, "status": "Active"}, "name")
 
 

@@ -1,0 +1,12 @@
+{
+ "doctype": "DocType",
+ "name": "Employee Portal Role",
+ "module": "HR Custom",
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": ["portal_role"],
+ "fields": [
+  {"fieldname":"portal_role","label":"Portal Role","fieldtype":"Select","options":"Employee\nLeave Approver\nHR","reqd":1,"in_list_view":1}
+ ],
+ "permissions": []
+}

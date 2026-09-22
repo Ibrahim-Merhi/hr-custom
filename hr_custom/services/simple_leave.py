@@ -7,6 +7,7 @@ from frappe.utils import add_days, cint, flt, getdate, now_datetime, nowdate
 from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
 
 from hr_custom.services.work_schedule import get_employee_schedule, get_holidays, get_leave_unit
+from hr_custom.services.portal_identity import get_effective_approval_user, has_portal_role
 
 
 def validate_employee_leave_setup(doc, method=None):
@@ -113,7 +114,7 @@ def _notify_next_reviewer(doc):
 
 
 def _is_hr_manager(user=None):
-    return bool({"HR Manager", "System Manager"}.intersection(frappe.get_roles(user or frappe.session.user)))
+    return has_portal_role("HR", user) or bool({"HR Manager", "System Manager"}.intersection(frappe.get_roles(user or frappe.session.user)))
 
 
 @frappe.whitelist()
@@ -127,12 +128,12 @@ def get_leave_approval_context(name):
             doc.flags.ignore_permissions = True
             doc.save()
             notify_leave_workflow(doc)
-    user = frappe.session.user
+    user = get_effective_approval_user()
     can_act = (
         doc.docstatus == 0
         and (
             (doc.custom_approval_stage == "Pending Approver Approval" and doc.custom_current_approver == user)
-            or (doc.custom_approval_stage == "Pending HR Approval" and _is_hr_manager(user))
+            or (doc.custom_approval_stage == "Pending HR Approval" and _is_hr_manager())
         )
     )
     return {
@@ -158,10 +159,10 @@ def process_leave_approval(name, action, remarks=None):
     if doc.docstatus != 0 or doc.custom_approval_stage not in ("Pending Approver Approval", "Pending HR Approval"):
         frappe.throw(_("This leave request is no longer waiting for approval."))
 
-    user = frappe.session.user
+    user = get_effective_approval_user()
     is_hr_step = doc.custom_approval_stage == "Pending HR Approval"
     if is_hr_step:
-        if not _is_hr_manager(user):
+        if not _is_hr_manager():
             frappe.throw(_("Only an HR Manager can complete the final approval."), frappe.PermissionError)
     elif doc.custom_current_approver != user:
         frappe.throw(_("This leave request is waiting for another approver."), frappe.PermissionError)
