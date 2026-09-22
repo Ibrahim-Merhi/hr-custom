@@ -8,7 +8,7 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import now_datetime
 from frappe.utils.password import check_password, get_decrypted_password, update_password
-from hr_custom.services.portal_identity import PORTAL_COOKIE, get_portal_session, token_hash
+from hr_custom.services.portal_identity import PORTAL_COOKIE, get_portal_session, set_portal_cookie, token_hash
 
 
 def upgrade_legacy_portal_passwords():
@@ -71,22 +71,13 @@ def login(username=None, password=None):
 
 	raw_token = secrets.token_urlsafe(32)
 	request = getattr(frappe.local, "request", None)
-	forwarded_proto = request.headers.get("X-Forwarded-Proto", "") if request else ""
-	secure_cookie = bool(request and (request.scheme == "https" or forwarded_proto.split(",", 1)[0].strip() == "https"))
 	frappe.get_doc({
 		"doctype": "Employee Portal Session", "credential": credential.name,
 		"token_hash": token_hash(raw_token),
 		"last_seen": now_datetime(), "ip_address": getattr(frappe.local, "request_ip", "") or "",
 		"user_agent": request.headers.get("User-Agent", "")[:500] if request else "",
 	}).insert(ignore_permissions=True)
-	frappe.local.cookie_manager.set_cookie(
-		# A long-lived persistent cookie keeps users signed in across browser and
-		# device restarts. Server-side revocation remains authoritative.
-		PORTAL_COOKIE, raw_token, max_age=10 * 365 * 24 * 60 * 60,
-		# Secure is mandatory on HTTPS. Allowing a non-Secure cookie only when the
-		# actual external request is HTTP keeps isolated development VMs usable.
-		httponly=True, secure=secure_cookie, samesite="Strict",
-	)
+	set_portal_cookie(raw_token)
 	frappe.db.set_value("Employee Portal Credential", credential.name, "last_login", now_datetime(), update_modified=False)
 	return {"authenticated": True, "employee": credential.employee, "roles": sorted(row.portal_role for row in credential.roles)}
 

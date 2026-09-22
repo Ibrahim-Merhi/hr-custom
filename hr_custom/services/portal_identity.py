@@ -9,6 +9,10 @@ from frappe.utils import get_datetime, now_datetime
 
 PORTAL_COOKIE = "hr_portal_token"
 PORTAL_USER_PREFIX = "portal::"
+# Current browsers cap persistent cookies at roughly 400 days. Refreshing this
+# window on authenticated requests provides durable sign-in without asking
+# browsers to accept an out-of-range Max-Age value.
+PORTAL_COOKIE_MAX_AGE = 400 * 24 * 60 * 60
 
 
 def token_hash(token: str) -> str:
@@ -18,6 +22,16 @@ def token_hash(token: str) -> str:
 def _cookie_token():
 	request = getattr(frappe.local, "request", None)
 	return request.cookies.get(PORTAL_COOKIE) if request else None
+
+
+def set_portal_cookie(token):
+	request = getattr(frappe.local, "request", None)
+	forwarded_proto = request.headers.get("X-Forwarded-Proto", "") if request else ""
+	secure = bool(request and (request.scheme == "https" or forwarded_proto.split(",", 1)[0].strip() == "https"))
+	frappe.local.cookie_manager.set_cookie(
+		PORTAL_COOKIE, token, max_age=PORTAL_COOKIE_MAX_AGE,
+		httponly=True, secure=secure, samesite="Lax",
+	)
 
 
 def get_portal_session(required=False):
@@ -39,6 +53,9 @@ def get_portal_session(required=False):
 			frappe.throw(_("Your portal session is no longer active. Please sign in again."), frappe.AuthenticationError)
 		return None
 	frappe.local.employee_portal_session = row
+	# Sliding persistence: every valid visit renews the browser-supported
+	# lifetime. The server token itself remains valid until explicitly revoked.
+	set_portal_cookie(token)
 	if not row.last_seen or (now_datetime() - get_datetime(row.last_seen)).total_seconds() > 300:
 		frappe.db.set_value("Employee Portal Session", row.name, "last_seen", now_datetime(), update_modified=False)
 	return row
