@@ -16,7 +16,9 @@ doctype_js={
     "Employment Type":"public/js/work_schedule.js",
     "Employee":["public/js/work_schedule.js", "public/js/employee_bilingual_name.js"],
 }
-after_install="hr_custom.install.after_install"
+# Custom fields reference DocTypes shipped by this app. Run their setup only
+# after Frappe has completed model, fixture, and customization synchronization.
+after_sync="hr_custom.install.after_sync"
 after_migrate="hr_custom.install.after_migrate"
 before_uninstall="hr_custom.install.before_uninstall"
 doc_events={

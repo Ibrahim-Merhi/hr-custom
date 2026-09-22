@@ -1,4 +1,4 @@
-def after_install():
+def after_sync():
     from hr_custom.patches.v1_0.create_custom_fields import execute
     from hr_custom.setup.workspace import ensure_hr_workspace_section
     execute(); ensure_hr_workspace_section()
