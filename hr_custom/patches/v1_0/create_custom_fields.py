@@ -17,7 +17,7 @@ FIELDS = {
         dict(fieldname="custom_first_name_ar", label="First Name (Arabic)", fieldtype="Data", translatable=0, insert_after="custom_arabic_name_column"),
         dict(fieldname="custom_middle_name_ar", label="Middle Name (Arabic)", fieldtype="Data", translatable=0, insert_after="custom_first_name_ar"),
         dict(fieldname="custom_last_name_ar", label="Last Name (Arabic)", fieldtype="Data", translatable=0, insert_after="custom_middle_name_ar"),
-        dict(fieldname="custom_employee_name_ar", label="Full Name (Arabic)", fieldtype="Data", translatable=0, read_only=1, insert_after="custom_last_name_ar"),
+        dict(fieldname="custom_employee_name_ar", label="Full Name (Arabic)", fieldtype="Data", translatable=0, read_only=1, in_standard_filter=1, insert_after="custom_last_name_ar"),
         dict(fieldname="custom_bilingual_name_section", label="Legacy Bilingual Employee Name", fieldtype="Section Break", insert_after="custom_employee_name_ar", hidden=1),
         dict(fieldname="custom_employee_name_en", label="Employee Name (English)", fieldtype="Data", translatable=0, insert_after="custom_bilingual_name_section", hidden=1),
         dict(fieldname="custom_name_column", fieldtype="Column Break", insert_after="custom_employee_name_en", hidden=1),
