@@ -17,5 +17,5 @@ frappe.ready(() => {
   // Logout is owned by mobile_attendance_app.js so the session is ended only
   // after the employee confirms in the app-styled dialog. Binding it here as
   // well would run alongside that handler and make Cancel log the user out.
-  if(document.body.getAttribute("frappe-session-status")==="logged-out")showLogin();
+  if(document.querySelector(".attendance-shell")?.dataset.authenticated==="0")showLogin();
 });

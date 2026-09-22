@@ -7,6 +7,8 @@ no_cache = 1
 
 def get_context(context):
 	credential = get_portal_credential()
+	if credential and credential.language in ("en", "ar"):
+		frappe.local.lang = credential.language
 	context.no_breadcrumbs = True
 	context.title = frappe._("Attendance")
 	context.is_guest = not credential

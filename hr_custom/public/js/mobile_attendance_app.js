@@ -897,7 +897,7 @@ frappe.ready(() => {
 		event.preventDefault();
 		const confirmed = await showAppDialog({title: __("Log out?"), message: __("Are you sure you want to log out of the Employee HR Portal?"), icon: "↪", confirmLabel: __("Log Out"), showCancel: true, danger: true});
 		if (!confirmed) return;
-		frappe.call({method: "logout", type: "POST", callback: () => { localStorage.removeItem("hr_attendance_logged_in"); location.replace(`/attendance?logout=${Date.now()}`); }});
+		frappe.call({method: "hr_custom.api.portal_auth.logout", type: "POST", callback: () => { localStorage.removeItem("hr_attendance_logged_in"); location.replace(`/attendance?logout=${Date.now()}`); }});
 	});
 	byId("action").onclick = async () => {
 		if (busy) return;

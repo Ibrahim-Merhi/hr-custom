@@ -149,8 +149,9 @@ def mark_portal_notification_read(notification):
     """Mark only the authenticated employee's selected notification as read."""
     if frappe.session.user == "Guest":
         frappe.throw(_("Please log in to view notifications."), frappe.PermissionError)
+    from hr_custom.services.portal_identity import get_effective_approval_user
     owner = frappe.db.get_value("PWA Notification", notification, "to_user")
-    if not owner or owner != frappe.session.user:
+    if not owner or owner != get_effective_approval_user():
         frappe.throw(_("Notification not found."), frappe.PermissionError)
     frappe.db.set_value("PWA Notification", notification, "read", 1, update_modified=False)
     return {"name": notification, "read": 1}
@@ -159,8 +160,9 @@ def mark_portal_notification_read(notification):
 def _owned_portal_notification(notification):
     if frappe.session.user == "Guest":
         frappe.throw(_("Please log in to manage notifications."), frappe.PermissionError)
+    from hr_custom.services.portal_identity import get_effective_approval_user
     owner = frappe.db.get_value("PWA Notification", notification, "to_user")
-    if not owner or owner != frappe.session.user:
+    if not owner or owner != get_effective_approval_user():
         frappe.throw(_("Notification not found."), frappe.PermissionError)
     return notification
 
@@ -301,7 +303,9 @@ def get_profile_data():
 def set_portal_language(language):
     if language not in ("en", "ar"):
         frappe.throw(_("Only English and Arabic are supported in the employee portal."))
-    frappe.db.set_value("User", frappe.session.user, "language", language, update_modified=False)
+    from hr_custom.services.portal_identity import get_portal_credential
+    credential = get_portal_credential(required=True)
+    frappe.db.set_value("Employee Portal Credential", credential.name, "language", language, update_modified=False)
     return {"language": language}
 
 
@@ -309,7 +313,8 @@ def set_portal_language(language):
 def get_portal_notifications(limit=30, include_archived=0):
     employee = _employee_for_user()
     limit = max(1, min(cint(limit) or 30, 100))
-    filters = {"to_user": frappe.session.user}
+    from hr_custom.services.portal_identity import get_effective_approval_user
+    filters = {"to_user": get_effective_approval_user()}
     if not cint(include_archived):
         filters["custom_archived"] = 0
     rows = frappe.get_all("PWA Notification", filters=filters, fields=["name", "message", "reference_document_type", "reference_document_name", "read", "custom_archived", "creation"], order_by="creation desc", limit=limit)
@@ -343,7 +348,8 @@ def get_portal_notifications(limit=30, include_archived=0):
 @frappe.whitelist(methods=["POST"])
 def mark_portal_notifications_read():
     _employee_for_user()
-    frappe.db.set_value("PWA Notification", {"to_user": frappe.session.user, "read": 0}, "read", 1, update_modified=False)
+    from hr_custom.services.portal_identity import get_effective_approval_user
+    frappe.db.set_value("PWA Notification", {"to_user": get_effective_approval_user(), "read": 0}, "read", 1, update_modified=False)
     return {"success": True}
 
 

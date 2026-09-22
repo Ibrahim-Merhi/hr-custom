@@ -5,6 +5,7 @@ app_description="Secure mobile GPS attendance"
 app_email="admin@example.com"
 app_license="MIT"
 required_apps=["erpnext","hrms"]
+auth_hooks=["hr_custom.services.portal_identity.authenticate_portal_request"]
 fixtures=[{"dt":"Property Setter","filters":[["doc_type","=","Employee"]]}]
 override_doctype_class={
     "Leave Application":"hr_custom.overrides.leave_application.HourlyLeaveApplication",
@@ -37,7 +38,10 @@ doc_events={
     },
 }
 # HRMS owns auto-attendance. This scheduler only creates custom exception alerts.
-scheduler_events={"hourly":["hr_custom.attendance.exceptions.scan_recent_checkins", "hr_custom.services.portal_attendance_processing.reconcile_recent_completed_pairs"]}
+scheduler_events={
+    "hourly":["hr_custom.attendance.exceptions.scan_recent_checkins", "hr_custom.services.portal_attendance_processing.reconcile_recent_completed_pairs"],
+    "daily":["hr_custom.api.portal_auth.cleanup_expired_sessions"],
+}
 website_route_rules=[{"from_route":"/attendance","to_route":"mobile-attendance"}]
 permission_query_conditions={
     "Attendance Correction Request":"hr_custom.permissions.correction_query",

@@ -34,47 +34,19 @@ class EmployeePortalCredential(Document):
 			frappe.throw(_("Portal access can only be enabled for an active Employee."))
 
 	def before_insert(self):
-		self.portal_user = self._ensure_website_user()
+		pass
 
 	def on_update(self):
 		self._save_hashed_portal_password()
-		portal_user = self._ensure_website_user()
-		if self.portal_user != portal_user:
-			self.db_set("portal_user", portal_user, update_modified=False)
+		if not self.enabled:
+			frappe.db.set_value("Employee Portal Session", {"credential": self.name}, "revoked", 1, update_modified=False)
 
 	def on_trash(self):
-		if self.portal_user and frappe.db.exists("User", self.portal_user):
-			frappe.db.set_value("User", self.portal_user, "enabled", 0, update_modified=False)
+		frappe.db.delete("Employee Portal Session", {"credential": self.name})
 
 	def _save_hashed_portal_password(self):
 		plain_password = self.flags.get("portal_plain_password")
 		if plain_password:
 			from frappe.utils.password import update_password
 			update_password(self.name, plain_password, doctype=self.doctype, fieldname="password")
-
-	def _ensure_website_user(self):
-		user = self.portal_user or _portal_user_email(self.employee)
-		employee_name = self.employee_name or frappe.db.get_value("Employee", self.employee, "employee_name") or self.employee
-		if frappe.db.exists("User", user):
-			values = frappe.db.get_value("User", user, ["user_type", "enabled"], as_dict=True)
-			if values.user_type != "Website User":
-				frappe.throw(_("The managed portal user {0} is not a Website User.").format(frappe.bold(user)))
-			frappe.db.set_value("User", user, {"enabled": int(bool(self.enabled)), "first_name": employee_name}, update_modified=False)
-			return user
-
-		doc = frappe.get_doc({
-			"doctype": "User",
-			"email": user,
-			"first_name": employee_name,
-			"enabled": int(bool(self.enabled)),
-			"user_type": "Website User",
-			"send_welcome_email": 0,
-		})
-		doc.flags.no_welcome_mail = True
-		doc.insert(ignore_permissions=True)
-		return doc.name
-
-
-def _portal_user_email(employee: str) -> str:
-	safe_employee = re.sub(r"[^a-z0-9]+", ".", employee.lower()).strip(".")
-	return f"portal.{safe_employee}@employees.invalid"
+			frappe.db.set_value("Employee Portal Session", {"credential": self.name}, "revoked", 1, update_modified=False)

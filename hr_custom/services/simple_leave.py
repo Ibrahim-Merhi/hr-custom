@@ -58,7 +58,7 @@ def _notify_reviewer(user, doc, event, text):
     if not user:
         return
     notification = frappe.new_doc("PWA Notification")
-    notification.from_user = frappe.session.user
+    notification.from_user = "Administrator" if str(frappe.session.user).startswith("portal::") else frappe.session.user
     notification.to_user = user
     notification.message = text
     notification.reference_document_type = "Leave Application"
