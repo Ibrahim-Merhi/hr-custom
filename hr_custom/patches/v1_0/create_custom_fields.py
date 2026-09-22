@@ -13,8 +13,7 @@ FIELDS = {
         dict(fieldname="custom_weekly_work_schedule", label="Weekly Work Schedule", fieldtype="Link", options="Weekly Work Schedule", insert_after="custom_work_schedule_section", description="Used for working hours, hourly leave and return-to-work calculations."),
         dict(fieldname="custom_use_custom_work_schedule", label="Use Employee-Specific Work Schedule", fieldtype="Check", default="0", insert_after="custom_weekly_work_schedule", description="Enable only when this employee works different hours from the assigned Employment Type schedule."),
         dict(fieldname="custom_weekly_working_hours", label="Employee-Specific Working Hours", fieldtype="Table", options="Employee Working Hours", insert_after="custom_use_custom_work_schedule", depends_on="eval:doc.custom_use_custom_work_schedule", description="Set the required hours and optional work period for each working day."),
-        dict(fieldname="custom_arabic_name_column", label="Arabic Name", fieldtype="Column Break", insert_after="employee_name"),
-        dict(fieldname="custom_first_name_ar", label="First Name (Arabic)", fieldtype="Data", translatable=0, insert_after="custom_arabic_name_column"),
+        dict(fieldname="custom_first_name_ar", label="First Name (Arabic)", fieldtype="Data", translatable=0, insert_after="column_break_9"),
         dict(fieldname="custom_middle_name_ar", label="Middle Name (Arabic)", fieldtype="Data", translatable=0, insert_after="custom_first_name_ar"),
         dict(fieldname="custom_last_name_ar", label="Last Name (Arabic)", fieldtype="Data", translatable=0, insert_after="custom_middle_name_ar"),
         dict(fieldname="custom_employee_name_ar", label="Full Name (Arabic)", fieldtype="Data", translatable=0, read_only=1, in_standard_filter=1, insert_after="custom_last_name_ar"),
@@ -110,6 +109,7 @@ FIELDS = {
 
 def execute():
     _recreate_employee_history_breaks()
+    _remove_obsolete_employee_columns()
     create_custom_fields(FIELDS, update=True)
     from hr_custom.setup.employee_layout import apply_employee_layout
     apply_employee_layout()
@@ -124,6 +124,12 @@ def _recreate_employee_history_breaks():
         fieldtype = frappe.db.get_value("Custom Field", name, "fieldtype")
         if fieldtype and fieldtype != "Section Break":
             frappe.delete_doc("Custom Field", name, ignore_permissions=True)
+
+
+def _remove_obsolete_employee_columns():
+    name = "Employee-custom_arabic_name_column"
+    if frappe.db.exists("Custom Field", name):
+        frappe.delete_doc("Custom Field", name, ignore_permissions=True)
 
 
 def _backfill_arabic_name_parts():

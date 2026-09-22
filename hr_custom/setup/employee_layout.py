@@ -5,7 +5,6 @@ import frappe
 
 ONE_COLUMN_BREAKS = {
     "custom_column_break_arrzi",  # Leave Approval
-    "column_break_9",             # Leave Approval
     "column_break1",              # Leave Approval
     "column_break_25",            # Work Schedule
     "column_break_18",            # Empty trailing Work Schedule column
@@ -26,6 +25,14 @@ EMPLOYEE_HISTORY_FIELDS = [
 
 LEAVE_POLICY_FIELDS = ["custom_leave_calculation_mode_override"]
 
+ARABIC_NAME_FIELDS = [
+    "naming_series",
+    "custom_first_name_ar",
+    "custom_middle_name_ar",
+    "custom_last_name_ar",
+    "custom_employee_name_ar",
+]
+
 
 def apply_employee_layout():
     """Preserve the customized Employee overview with full-width HR sections."""
@@ -38,6 +45,11 @@ def apply_employee_layout():
     if setter and setter.value:
         order = json.loads(setter.value)
         order = [fieldname for fieldname in order if fieldname not in ONE_COLUMN_BREAKS]
+        order = [fieldname for fieldname in order if fieldname != "custom_arabic_name_column"]
+        order = [fieldname for fieldname in order if fieldname not in ARABIC_NAME_FIELDS]
+        order = [fieldname for fieldname in order if fieldname != "column_break_9"]
+        name_anchor = order.index("employee_name") + 1
+        order[name_anchor:name_anchor] = ["column_break_9", *ARABIC_NAME_FIELDS]
         order = [fieldname for fieldname in order if fieldname not in MOBILE_ATTENDANCE_FIELDS]
         order = [fieldname for fieldname in order if fieldname not in LEAVE_POLICY_FIELDS]
         leave_anchor = order.index("custom_default_mobile_leave_type") + 1
