@@ -20,7 +20,6 @@ frappe.ready(() => {
     try {
       const s=await call("hr_custom.api.mobile_attendance.get_status");
       el("employee").textContent=`${s.employee_name} (${s.employee})`; el("branch").textContent=s.branch;
-      el("shift").textContent=s.shift_start?`${moment(s.shift_start).format("HH:mm")} – ${moment(s.shift_end).format("HH:mm")}`:__("No shift");
       el("state").textContent=__(s.current_state); el("action").textContent=s.next_action==="IN"?__("CHECK IN"):__("CHECK OUT");
       el("last-checkin").textContent=s.last_checkin?__("Last action: {0} at {1}",[s.last_checkin.log_type,moment(s.last_checkin.time).format("YYYY-MM-DD HH:mm:ss")]):"";
       locate();

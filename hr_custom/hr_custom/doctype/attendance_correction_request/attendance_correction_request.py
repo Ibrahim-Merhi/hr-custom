@@ -7,6 +7,16 @@ HR_ROLES = {"HR Manager", "System Manager"}
 
 
 class AttendanceCorrectionRequest(Document):
+    def before_insert(self):
+        from hr_custom.services.attendance_correction import initialize_correction_approval
+
+        initialize_correction_approval(self)
+
+    def after_insert(self):
+        from hr_custom.services.attendance_correction import notify_current_reviewer
+
+        notify_current_reviewer(self)
+
     def validate(self):
         roles = set(frappe.get_roles())
         if not HR_ROLES.intersection(roles):
@@ -25,8 +35,12 @@ class AttendanceCorrectionRequest(Document):
         if self.request_type in ("Missing Check Out", "Wrong Check Out") and not self.requested_check_out_time:
             frappe.throw(_("Requested Check Out Time is required."))
 
+    def before_submit(self):
+        if self.status != "Approved" or self.approval_stage != "Approved":
+            frappe.throw(_("Only a correction request with final HR approval can be submitted."))
+
     def on_submit(self):
-        self.db_set("status", "Pending Approval", update_modified=False)
+        pass
 
 
 def _require_hr():
@@ -36,33 +50,29 @@ def _require_hr():
 
 @frappe.whitelist(methods=["POST"])
 def approve(name, remarks=None):
-    _require_hr()
-    doc = frappe.get_doc("Attendance Correction Request", name)
-    if doc.docstatus != 1 or doc.status != "Pending Approval":
-        frappe.throw(_("Only a submitted pending request can be approved."))
-    doc.db_set({"status": "Approved", "approved_by": frappe.session.user, "approval_date": now_datetime(), "remarks": remarks or doc.remarks})
-    apply(name)
-    return frappe.get_doc("Attendance Correction Request", name)
+    from hr_custom.services.attendance_correction import process_correction_approval
+
+    return process_correction_approval(name, "approve", remarks)
 
 
 @frappe.whitelist(methods=["POST"])
 def reject(name, remarks=None):
-    _require_hr()
-    doc = frappe.get_doc("Attendance Correction Request", name)
-    if doc.docstatus != 1 or doc.status != "Pending Approval":
-        frappe.throw(_("Only a submitted pending request can be rejected."))
-    doc.db_set({"status": "Rejected", "approved_by": frappe.session.user, "approval_date": now_datetime(), "remarks": remarks or doc.remarks})
-    return doc
+    from hr_custom.services.attendance_correction import process_correction_approval
+
+    return process_correction_approval(name, "reject", remarks)
 
 
 @frappe.whitelist(methods=["POST"])
 def apply(name):
     _require_hr()
     doc = frappe.get_doc("Attendance Correction Request", name)
+    if doc.docstatus != 1:
+        frappe.throw(_("The approved request must be submitted before it can be applied."))
     if doc.status not in ("Approved", "Applied"):
         frappe.throw(_("The request must be approved before it can be applied."))
     if doc.status == "Applied":
-        return doc
+        _rebuild_attendance(doc)
+        return frappe.get_doc("Attendance Correction Request", name)
     if doc.original_checkin and doc.request_type.startswith("Wrong"):
         original = frappe.get_doc("Employee Checkin", doc.original_checkin)
         if original.employee != doc.employee:
@@ -76,7 +86,14 @@ def apply(name):
         if frappe.db.exists("Employee Checkin", {"employee": doc.employee, "time": timestamp, "log_type": log_type, "custom_correction_request": doc.name}):
             continue
         frappe.get_doc({"doctype": "Employee Checkin", "employee": doc.employee, "time": timestamp, "log_type": log_type, "custom_checkin_source": "Manual HR", "custom_server_timestamp": now_datetime(), "custom_validation_message": _("Created from approved correction request {0}").format(doc.name), "custom_correction_request": doc.name}).insert(ignore_permissions=True)
-    doc.db_set("status", "Applied")
+    doc.db_set({"status": "Applied", "approval_stage": "Applied"})
+    _rebuild_attendance(doc)
     for exception in frappe.get_all("Attendance Exception", filters={"employee": doc.employee, "attendance_date": doc.attendance_date, "status": "Open"}, pluck="name"):
         frappe.db.set_value("Attendance Exception", exception, {"status": "Resolved", "resolved_by": frappe.session.user, "resolved_on": now_datetime(), "resolution_notes": _("Resolved by correction request {0}").format(doc.name)})
     return frappe.get_doc("Attendance Correction Request", name)
+
+
+def _rebuild_attendance(doc):
+    """Apply the same temporary IN/OUT rule used by normal punches."""
+    from hr_custom.services.portal_attendance_processing import finalize_completed_day
+    return finalize_completed_day(doc.employee, doc.attendance_date)

@@ -1,0 +1,30 @@
+{
+ "doctype":"DocType","name":"Yearly Leave Allocation","module":"HR Custom","is_submittable":1,"track_changes":1,"autoname":"format:YLA-{allocation_year}-{#####}","title_field":"allocation_year","allow_import":1,
+ "field_order":["company","allocation_year","from_date","to_date","status","description","filters_section","filter_branch","filter_department","filter_employment_type","filter_designation","summary_section","total_employees","total_allocations","successful_allocations","failed_allocations","allocation_generated","employees","allocations"],
+ "fields":[
+  {"fieldname":"company","label":"Company","fieldtype":"Link","options":"Company","reqd":1,"in_list_view":1},
+  {"fieldname":"allocation_year","label":"Allocation Year","fieldtype":"Int","reqd":1,"in_list_view":1},
+  {"fieldname":"from_date","label":"From Date","fieldtype":"Date","reqd":1},
+  {"fieldname":"to_date","label":"To Date","fieldtype":"Date","reqd":1},
+  {"fieldname":"status","label":"Status","fieldtype":"Select","options":"Draft\nReady\nProcessing\nCompleted\nPartially Completed\nFailed\nCancelled","default":"Draft","read_only":1,"in_list_view":1},
+  {"fieldname":"description","label":"Description","fieldtype":"Small Text"},
+  {"fieldname":"filters_section","label":"Employee Filters","fieldtype":"Section Break","collapsible":1},
+  {"fieldname":"filter_branch","label":"Branch","fieldtype":"Link","options":"Branch"},
+  {"fieldname":"filter_department","label":"Department","fieldtype":"Link","options":"Department"},
+  {"fieldname":"filter_employment_type","label":"Employment Type","fieldtype":"Link","options":"Employment Type"},
+  {"fieldname":"filter_designation","label":"Designation","fieldtype":"Link","options":"Designation"},
+  {"fieldname":"summary_section","label":"Processing Summary","fieldtype":"Section Break"},
+  {"fieldname":"total_employees","label":"Total Employees","fieldtype":"Int","read_only":1},
+  {"fieldname":"total_allocations","label":"Total Allocations","fieldtype":"Int","read_only":1},
+  {"fieldname":"successful_allocations","label":"Successful Allocations","fieldtype":"Int","read_only":1},
+  {"fieldname":"failed_allocations","label":"Failed Allocations","fieldtype":"Int","read_only":1},
+  {"fieldname":"allocation_generated","label":"Allocations Generated","fieldtype":"Check","read_only":1},
+  {"fieldname":"employees","label":"Employees","fieldtype":"Table","options":"Yearly Leave Allocation Employee"},
+  {"fieldname":"allocations","label":"Leave Allowances","fieldtype":"Table","options":"Yearly Leave Allocation Detail","allow_on_submit":1}
+ ],
+ "permissions":[
+  {"role":"HR User","read":1,"write":1,"create":1,"report":1,"export":1,"print":1,"email":1},
+  {"role":"HR Manager","read":1,"write":1,"create":1,"delete":1,"submit":1,"cancel":1,"amend":1,"report":1,"export":1,"print":1,"email":1,"share":1},
+  {"role":"System Manager","read":1,"write":1,"create":1,"delete":1,"submit":1,"cancel":1,"amend":1,"report":1,"export":1,"print":1,"email":1,"share":1}
+ ]
+}

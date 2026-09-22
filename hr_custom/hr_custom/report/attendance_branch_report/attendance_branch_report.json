@@ -1,0 +1,1 @@
+{"doctype":"Report","name":"Attendance Branch Report","report_name":"Attendance Branch Report","ref_doctype":"Attendance","report_type":"Script Report","module":"HR Custom","is_standard":"Yes","roles":[{"role":"HR User"},{"role":"HR Manager"},{"role":"System Manager"}]}

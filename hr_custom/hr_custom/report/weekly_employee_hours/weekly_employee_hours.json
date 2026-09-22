@@ -1,0 +1,10 @@
+{
+ "doctype":"Report",
+ "name":"Weekly Employee Hours",
+ "module":"HR Custom",
+ "report_type":"Script Report",
+ "ref_doctype":"Employee Checkin",
+ "is_standard":"Yes",
+ "add_total_row":1,
+ "roles":[{"role":"HR User"},{"role":"HR Manager"},{"role":"System Manager"}]
+}

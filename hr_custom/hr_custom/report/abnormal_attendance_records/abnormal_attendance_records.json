@@ -1,0 +1,10 @@
+{
+ "doctype": "Report",
+ "name": "Abnormal Attendance Records",
+ "report_name": "Abnormal Attendance Records",
+ "ref_doctype": "Attendance Exception",
+ "report_type": "Script Report",
+ "module": "HR Custom",
+ "is_standard": "Yes",
+ "roles": [{"role": "HR User"}, {"role": "HR Manager"}, {"role": "System Manager"}]
+}

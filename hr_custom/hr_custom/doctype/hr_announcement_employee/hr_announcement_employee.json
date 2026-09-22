@@ -1,0 +1,1 @@
+{"doctype":"DocType","name":"HR Announcement Employee","module":"HR Custom","istable":1,"editable_grid":1,"field_order":["employee"],"fields":[{"fieldname":"employee","label":"Employee","fieldtype":"Link","options":"Employee","reqd":1,"in_list_view":1}]}

@@ -1,0 +1,19 @@
+{
+ "doctype":"DocType","name":"Yearly Leave Allocation Detail","module":"HR Custom","istable":1,"editable_grid":1,
+ "field_order":["employee","employee_name","leave_type","leave_unit","allocated_amount","from_date","to_date","standard_leave_allocation","allocation_status","error_message","legacy_employee_code","legacy_leave_type_code","migration_source"],
+ "fields":[
+  {"fieldname":"employee","label":"Employee","fieldtype":"Link","options":"Employee","reqd":1,"in_list_view":1,"columns":1},
+  {"fieldname":"employee_name","label":"Employee Name","fieldtype":"Data","read_only":1,"fetch_from":"employee.employee_name","in_list_view":1,"columns":2},
+  {"fieldname":"leave_type","label":"Leave Type","fieldtype":"Link","options":"Leave Type","reqd":1,"in_list_view":1,"columns":2},
+  {"fieldname":"leave_unit","label":"Unit","fieldtype":"Select","options":"Days\nHours","read_only":1,"in_list_view":1,"columns":1},
+  {"fieldname":"allocated_amount","label":"Allocated Amount","fieldtype":"Float","precision":2,"reqd":1,"in_list_view":1,"columns":2,"allow_on_submit":1},
+  {"fieldname":"from_date","label":"From Date","fieldtype":"Date","reqd":1},
+  {"fieldname":"to_date","label":"To Date","fieldtype":"Date","reqd":1},
+  {"fieldname":"standard_leave_allocation","label":"Standard Leave Allocation","fieldtype":"Link","options":"Leave Allocation","read_only":1},
+  {"fieldname":"allocation_status","label":"Status","fieldtype":"Select","options":"Pending\nCreated\nSubmitted\nFailed\nSkipped\nCancelled","default":"Pending","read_only":1,"in_list_view":1,"columns":1},
+  {"fieldname":"error_message","label":"Failure Reason","fieldtype":"Small Text","read_only":1,"in_list_view":1,"columns":3},
+  {"fieldname":"legacy_employee_code","label":"Legacy Employee Code","fieldtype":"Data"},
+  {"fieldname":"legacy_leave_type_code","label":"Legacy Leave Type Code","fieldtype":"Data"},
+  {"fieldname":"migration_source","label":"Migration Source","fieldtype":"Data"}
+ ]
+}

@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.env
+.env.*
+!.env.example
+
+*.log
+*.sql
+*.sql.gz
+*.bak
+*.backup
+*.tgz
+*.tar.gz
+
+.DS_Store
+.idea/
+.vscode/
+node_modules/
+dist/
+
+# Frappe sites, runtime files and user-generated data never belong in the app.
+sites/
+private/
+public/files/

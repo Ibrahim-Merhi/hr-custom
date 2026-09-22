@@ -1,0 +1,1 @@
+{"doctype":"Report","name":"Hourly Leave Balance","module":"HR Custom","ref_doctype":"Leave Allocation","report_type":"Script Report","is_standard":"Yes","add_total_row":1,"roles":[{"role":"HR User"},{"role":"HR Manager"},{"role":"System Manager"}]}

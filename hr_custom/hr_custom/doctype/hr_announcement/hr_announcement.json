@@ -1,0 +1,28 @@
+{
+ "doctype": "DocType",
+ "name": "HR Announcement",
+ "module": "HR Custom",
+ "autoname": "format:HR-ANN-{YYYY}-{#####}",
+ "is_submittable": 1,
+ "track_changes": 1,
+ "title_field": "title",
+ "search_fields": "title",
+ "field_order": ["announcement_section", "title", "message", "targeting_section", "all_employees", "companies", "departments", "employment_types", "employees", "result_section", "recipient_count"],
+ "fields": [
+  {"fieldname":"announcement_section","label":"Announcement","fieldtype":"Section Break"},
+  {"fieldname":"title","label":"Title","fieldtype":"Data","reqd":1,"in_list_view":1,"bold":1},
+  {"fieldname":"message","label":"Message","fieldtype":"Small Text","reqd":1},
+  {"fieldname":"targeting_section","label":"Target Employees","fieldtype":"Section Break","description":"Selections in different sections are combined. Example: Employment Type Full-time and Department Finance targets only full-time Finance employees."},
+  {"fieldname":"all_employees","label":"All Active Employees","fieldtype":"Check","default":"0"},
+  {"fieldname":"companies","label":"Companies","fieldtype":"Table","options":"HR Announcement Company","depends_on":"eval:!doc.all_employees"},
+  {"fieldname":"departments","label":"Departments","fieldtype":"Table","options":"HR Announcement Department","depends_on":"eval:!doc.all_employees"},
+  {"fieldname":"employment_types","label":"Employment Types","fieldtype":"Table","options":"HR Announcement Employment Type","depends_on":"eval:!doc.all_employees"},
+  {"fieldname":"employees","label":"Specific Employees","fieldtype":"Table","options":"HR Announcement Employee","depends_on":"eval:!doc.all_employees"},
+  {"fieldname":"result_section","label":"Delivery","fieldtype":"Section Break","collapsible":1},
+  {"fieldname":"recipient_count","label":"Recipients","fieldtype":"Int","read_only":1,"in_list_view":1}
+ ],
+ "permissions": [
+  {"role":"HR Manager","read":1,"write":1,"create":1,"delete":1,"submit":1,"cancel":1,"amend":1,"print":1,"email":1,"export":1,"report":1,"share":1},
+  {"role":"System Manager","read":1,"write":1,"create":1,"delete":1,"submit":1,"cancel":1,"amend":1,"print":1,"email":1,"export":1,"report":1,"share":1}
+ ]
+}

@@ -40,11 +40,10 @@ def own_employee_permission(doc, user=None, permission_type=None):
     user = user or frappe.session.user
     if user == "Administrator" or _is_hr(user):
         return True
-    if permission_type not in (None, "read", "create", "write"):
+    if permission_type not in (None, "read", "create", "write", "submit"):
         return False
     return bool(doc.employee and doc.employee == employee_for_user(user))
 
 
 def exception_permission(doc, user=None, permission_type=None):
     return bool((user or frappe.session.user) == "Administrator" or _is_hr(user or frappe.session.user))
-
