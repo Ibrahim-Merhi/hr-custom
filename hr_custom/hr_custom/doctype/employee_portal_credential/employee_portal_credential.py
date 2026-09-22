@@ -12,11 +12,13 @@ PORTAL_ROLES = {"Employee", "Leave Approver", "HR"}
 
 class EmployeePortalCredential(Document):
 	def validate(self):
-		self.username = (self.username or "").strip().lower()
+		self.username = (self.username or "").strip()
 		if not self.username:
 			frappe.throw(_("Portal Username is required."))
-		if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{2,79}", self.username):
+		if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{2,79}", self.username):
 			frappe.throw(_("Portal Username must be 3-80 characters and may contain letters, numbers, dots, underscores and hyphens."))
+		if self.password and not self.is_dummy_password(self.password):
+			self.flags.portal_plain_password = self.password
 
 		roles = []
 		for row in self.roles or []:
@@ -35,6 +37,7 @@ class EmployeePortalCredential(Document):
 		self.portal_user = self._ensure_website_user()
 
 	def on_update(self):
+		self._save_hashed_portal_password()
 		portal_user = self._ensure_website_user()
 		if self.portal_user != portal_user:
 			self.db_set("portal_user", portal_user, update_modified=False)
@@ -42,6 +45,12 @@ class EmployeePortalCredential(Document):
 	def on_trash(self):
 		if self.portal_user and frappe.db.exists("User", self.portal_user):
 			frappe.db.set_value("User", self.portal_user, "enabled", 0, update_modified=False)
+
+	def _save_hashed_portal_password(self):
+		plain_password = self.flags.get("portal_plain_password")
+		if plain_password:
+			from frappe.utils.password import update_password
+			update_password(self.name, plain_password, doctype=self.doctype, fieldname="password")
 
 	def _ensure_website_user(self):
 		user = self.portal_user or _portal_user_email(self.employee)
