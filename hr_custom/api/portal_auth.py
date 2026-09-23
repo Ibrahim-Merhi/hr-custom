@@ -8,7 +8,7 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import now_datetime
 from frappe.utils.password import check_password, get_decrypted_password, update_password
-from hr_custom.services.portal_identity import PORTAL_COOKIE, get_portal_session, set_portal_cookie, token_hash
+from hr_custom.services.portal_identity import PORTAL_COOKIE, PORTAL_USER_PREFIX, get_portal_credential, get_portal_session, set_portal_cookie, token_hash
 
 
 def upgrade_legacy_portal_passwords():
@@ -84,8 +84,20 @@ def login(username=None, password=None):
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 def logout():
-	session = get_portal_session()
+	session = get_portal_session(renew=False)
 	if session:
 		frappe.db.set_value("Employee Portal Session", session.name, "revoked", 1, update_modified=False)
 	frappe.local.cookie_manager.delete_cookie(PORTAL_COOKIE)
 	return {"logged_out": True}
+
+
+@frappe.whitelist()
+def subscribe_portal_push(fcm_token, project_name="hrms"):
+	"""Register notifications against the authenticated portal identity."""
+	from frappe.push_notification import PushNotification
+
+	credential = get_portal_credential(required=True)
+	success, message = PushNotification(project_name).add_token(
+		f"{PORTAL_USER_PREFIX}{credential.name}", fcm_token
+	)
+	return {"success": success, "message": message}

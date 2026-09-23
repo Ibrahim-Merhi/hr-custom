@@ -32,7 +32,7 @@ frappe.ready(async () => {
 				const permission = await Notification.requestPermission();
 				if (permission !== "granted") throw new Error(__("Notification permission was not granted. Enable it in phone Settings."));
 				const token = await getToken(messaging, {vapidKey, serviceWorkerRegistration: registration});
-				const response = await fetch(`/api/method/frappe.push_notification.subscribe?fcm_token=${encodeURIComponent(token)}&project_name=hrms`, {credentials: "same-origin"});
+				const response = await fetch(`/api/method/hr_custom.api.portal_auth.subscribe_portal_push?fcm_token=${encodeURIComponent(token)}&project_name=hrms`, {credentials: "same-origin"});
 				if (!response.ok) throw new Error(__("Could not register this phone for notifications."));
 				localStorage.setItem("firebase_token_hrms", token);
 				button.textContent = __("Locked-screen notifications enabled"); setMessage(__("This phone is ready to receive HR notifications."));

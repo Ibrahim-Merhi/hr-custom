@@ -34,7 +34,7 @@ def set_portal_cookie(token):
 	)
 
 
-def get_portal_session(required=False):
+def get_portal_session(required=False, renew=True):
 	cached = getattr(frappe.local, "employee_portal_session", None)
 	if cached:
 		return cached
@@ -55,7 +55,8 @@ def get_portal_session(required=False):
 	frappe.local.employee_portal_session = row
 	# Sliding persistence: every valid visit renews the browser-supported
 	# lifetime. The server token itself remains valid until explicitly revoked.
-	set_portal_cookie(token)
+	if renew:
+		set_portal_cookie(token)
 	if not row.last_seen or (now_datetime() - get_datetime(row.last_seen)).total_seconds() > 300:
 		frappe.db.set_value("Employee Portal Session", row.name, "last_seen", now_datetime(), update_modified=False)
 	return row
@@ -79,6 +80,8 @@ def authenticate_portal_request():
 	"""Authenticate hr_custom API calls with an independent portal token."""
 	request = getattr(frappe.local, "request", None)
 	if not request or not request.path.startswith("/api/method/hr_custom."):
+		return
+	if request.path == "/api/method/hr_custom.api.portal_auth.logout":
 		return
 	credential = get_portal_credential()
 	if credential:
