@@ -15,7 +15,12 @@ def finalize_completed_day(employee, attendance_date):
     user = frappe.session.user
     privileged_roles = {"System Manager", "HR Manager", "HR User"}
     if user != "Administrator" and not privileged_roles.intersection(frappe.get_roles(user)):
-        own_employee = frappe.db.get_value("Employee", {"user_id": user, "status": "Active"}, "name")
+        from hr_custom.services.portal_identity import get_portal_credential
+
+        credential = get_portal_credential(user)
+        own_employee = credential.employee if credential else frappe.db.get_value(
+            "Employee", {"user_id": user, "status": "Active"}, "name"
+        )
         if own_employee != employee:
             frappe.throw(
                 frappe._("You can only process attendance for your own employee record."),
