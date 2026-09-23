@@ -91,6 +91,8 @@ frappe.ready(() => {
 		if (isArabic && arabicPortalTranslations[text] && Array.isArray(replacements)) replacements.forEach((value, index) => { translated = translated.replaceAll(`{${index}}`, value); });
 		return translated;
 	};
+	const localizedFirstName = (value) => isArabic ? (value.custom_first_name_ar || value.first_name || value.custom_employee_name_ar || value.employee_name) : (value.first_name || value.employee_name || value.custom_first_name_ar || value.custom_employee_name_ar);
+	const localizedEmployeeName = (value) => isArabic ? (value.custom_employee_name_ar || value.employee_name || value.custom_first_name_ar || value.first_name) : (value.employee_name || value.custom_employee_name_ar || value.first_name || value.custom_first_name_ar);
 	const portalDate = (value, options = {day: "numeric", month: "short", year: "numeric"}) => {
 		const date = moment(value).toDate();
 		return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(isArabic ? "ar-LB" : "en-US", options).format(date);
@@ -179,8 +181,8 @@ frappe.ready(() => {
 		startClock(value.server_time);
 		const hour = moment(Date.now() + clockOffset).hour();
 		const greeting = hour < 12 ? __("Good morning") : hour < 18 ? __("Good afternoon") : __("Good evening");
-		setText("greeting", `${greeting}، ${value.first_name || value.employee_name}`);
-		setText("employee", value.employee_name);
+		setText("greeting", greeting + "، " + localizedFirstName(value));
+		setText("employee", localizedEmployeeName(value));
 		setText("branch", value.branch || __("Not assigned"));
 		setText("state", __(value.current_state));
 		byId("state-dot")?.classList.toggle("in", value.current_state === "CHECKED IN");
@@ -474,15 +476,17 @@ frappe.ready(() => {
 		applyTheme(localStorage.getItem("hr_portal_theme") || "light");
 		try {
 			const row = await api("hr_custom.api.mobile_attendance.get_profile_data");
-			setText("profile-name", row.employee_name); setText("profile-id", row.name); setText("profile-avatar", (row.employee_name || "?").trim().charAt(0).toUpperCase());
+			const displayName = localizedEmployeeName(row);
+			setText("profile-name", displayName); setText("profile-id", row.name); setText("profile-avatar", (displayName || "?").trim().charAt(0).toUpperCase());
 			const salary = row.salary?.[0];
+			const profileValues = {...row, employee_name: displayName};
 			const groups = [
 				[__("Employee Details"), {employee_name: __("Employee Name"), gender: __("Gender"), date_of_birth: __("Date of Birth"), date_of_joining: __("Date of Joining"), employment_type: __("Employment Type")}],
 				[__("Company Information"), {company: __("Company"), department: __("Department"), designation: __("Designation"), branch: __("Branch"), grade: __("Grade"), reports_to: __("Reports To"), holiday_list: __("Holiday List")}],
 				[__("Contact Information"), {cell_number: __("Phone"), personal_email: __("Personal Email"), company_email: __("Company Email"), prefered_contact_email: __("Preferred Contact Email")}],
 			];
 			const detailRows = (values, labels) => Object.entries(labels).filter(([key]) => values[key]).map(([key, label]) => `<div class="profile-detail"><span>${label}</span><strong>${frappe.utils.escape_html(__(String(values[key])))}</strong></div>`).join("") || `<div class="history-loading">${__("No information available.")}</div>`;
-			let html = groups.map(([title, labels], index) => `<details class="profile-section" ${index === 0 ? "open" : ""}><summary><span>${title}</span><b>⌄</b></summary><div>${detailRows(row, labels)}</div></details>`).join("");
+			let html = groups.map(([title, labels], index) => `<details class="profile-section" ${index === 0 ? "open" : ""}><summary><span>${title}</span><b>⌄</b></summary><div>${detailRows(profileValues, labels)}</div></details>`).join("");
 			const salaryValues = salary ? {period: moment(salary.end_date).format("MMMM YYYY"), gross: `${salary.currency || ""} ${formatNumber(salary.gross_pay)}`, deductions: `${salary.currency || ""} ${formatNumber(salary.total_deduction)}`, net: `${salary.currency || ""} ${formatNumber(salary.net_pay)}`} : {};
 			html += `<details class="profile-section"><summary><span>${__("Salary Information")}</span><b>⌄</b></summary><div>${detailRows(salaryValues, {period: __("Latest Period"), gross: __("Gross Pay"), deductions: __("Deductions"), net: __("Net Pay")})}</div></details>`;
 			byId("profile-details").innerHTML = html;

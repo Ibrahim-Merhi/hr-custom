@@ -20,5 +20,18 @@ def get_context(context):
 	context.title = frappe._("Attendance")
 	context.portal_authenticated = bool(credential)
 	context.session_user = frappe.session.user if context.portal_authenticated else None
-	context.full_name = credential.employee_name if context.portal_authenticated else None
+	context.full_name = None
+	if context.portal_authenticated:
+		fields = ["first_name", "employee_name"]
+		meta = frappe.get_meta("Employee")
+		for fieldname in ("custom_first_name_ar", "custom_employee_name_ar"):
+			if meta.has_field(fieldname):
+				fields.append(fieldname)
+		employee = frappe.db.get_value("Employee", credential.employee, fields, as_dict=True)
+		if employee:
+			context.full_name = (
+				employee.get("custom_first_name_ar") or employee.first_name or employee.get("custom_employee_name_ar") or employee.employee_name
+				if portal_language == "ar"
+				else employee.first_name or employee.employee_name or employee.get("custom_first_name_ar") or employee.get("custom_employee_name_ar")
+			)
 	context.body_class = "attendance-app-page"
