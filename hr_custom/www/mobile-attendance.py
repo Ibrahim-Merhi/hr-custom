@@ -11,7 +11,7 @@ def get_context(context):
 		frappe.local.lang = credential.language
 	context.no_breadcrumbs = True
 	context.title = frappe._("Attendance")
-	context.is_guest = not credential
-	context.session_user = None if context.is_guest else frappe.session.user
-	context.full_name = None if context.is_guest else credential.employee_name
+	context.portal_authenticated = bool(credential)
+	context.session_user = frappe.session.user if context.portal_authenticated else None
+	context.full_name = credential.employee_name if context.portal_authenticated else None
 	context.body_class = "attendance-app-page"

@@ -16,10 +16,10 @@
 <script>window.addEventListener("DOMContentLoaded",()=>window.setTimeout(()=>document.getElementById("app-splash")?.classList.add("is-ready"),1800));</script>
 {% endblock %}
 {% block content %}
-<main class="attendance-shell" data-authenticated="{{ 0 if is_guest else 1 }}">
+<main class="attendance-shell" data-authenticated="{{ 1 if portal_authenticated else 0 }}">
   <section class="app-splash" id="app-splash" aria-label="{{ _("Loading Employee HR Portal") }}"><div class="splash-center"><img src="/assets/hr_custom/images/attendance-icon-512.png?v=2" alt=""><h1>{{ _("Employee HR Portal") }}</h1><p>{{ _("Attendance, leave, salary and profile in one simple app.") }}</p><span class="splash-loader" aria-hidden="true"></span></div><small>{{ _("Powered by Avraham") }}</small></section>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
-  <section class="auth-panel {% if not is_guest %}is-hidden{% endif %}" id="auth-panel">
+  <section class="auth-panel {% if portal_authenticated %}is-hidden{% endif %}" id="auth-panel">
     <div class="auth-brand"><div class="brand-mark"><img src="/assets/hr_custom/images/attendance-icon-512.png?v=2" alt=""></div><div><p class="eyebrow">{{ _("EMPLOYEE PORTAL") }}</p><span>{{ _("Secure employee self service") }}</span></div></div>
     <div class="auth-heading"><h1>{{ _("Welcome back") }}</h1><p class="subtle">{{ _("Sign in to manage attendance, leave and salary securely.") }}</p></div>
     <form id="login-form" autocomplete="on">
@@ -30,7 +30,7 @@
     <div class="feedback" id="login-message" role="alert"></div>
     <div class="auth-trust"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>{{ _("Protected employee access") }}</span></div>
   </section>
-  <section class="app-panel {% if is_guest %}is-hidden{% endif %}" id="app-panel">
+  <section class="app-panel {% if not portal_authenticated %}is-hidden{% endif %}" id="app-panel">
     <header class="app-topbar">
       <div><p class="eyebrow">{{ _("EMPLOYEE HR PORTAL") }}</p><h1 id="greeting">{{ _("Hello") }}, {{ full_name or "" }}</h1></div>
 <div class="top-actions"><button class="icon-button location-status-button" id="location-info-button" type="button" aria-label="{{ _("Location status") }}" title="{{ _("Location status") }}"><svg viewBox="0 0 24 24"><path d="M12 21s7-6.1 7-12A7 7 0 105 9c0 5.9 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/><path class="location-slash" id="location-slash" d="M3 3l18 18"/></svg></button><button class="icon-button refresh-button" id="refresh-button" type="button" aria-label="{{ _("Refresh") }}" title="{{ _("Refresh") }}"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M19 11a8 8 0 10.2 6"/></svg></button><button class="icon-button notification-button" id="notification-button" type="button" aria-label="{{ _("Notifications") }}" title="{{ _("Notifications") }}"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><b id="notification-badge" hidden>0</b></button><button class="icon-button install-icon-button" id="install-icon-button" type="button" aria-label="{{ _("Install app") }}" title="{{ _("Install app") }}"><svg viewBox="0 0 24 24"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 18v2h14v-2"/></svg></button><button class="icon-button" id="logout-button" aria-label="{{ _("Log out") }}" title="{{ _("Log out") }}"><svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 012 2v14a2 2 0 01-2 2h-5"/></svg></button></div>
