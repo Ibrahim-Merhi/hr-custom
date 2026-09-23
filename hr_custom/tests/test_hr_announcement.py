@@ -41,6 +41,41 @@ class TestHRAnnouncement(FrappeTestCase):
         self.assertIn(self.target, names)
         self.assertNotIn(self.other, names)
 
+    ("hr_custom.overrides.pwa_notification.CustomPWANotification.send_push_notification")
+    def test_portal_credential_is_valid_announcement_recipient(self, _push):
+        portal_employee = make_employee("announcement.portal@example.com", company=self.company)
+        frappe.db.set_value(
+            "Employee",
+            portal_employee,
+            {"department": self.department, "employment_type": self.employment_type, "status": "Active", "user_id": None},
+        )
+        frappe.get_doc(
+            {
+                "doctype": "Employee Portal Credential",
+                "employee": portal_employee,
+                "username": f"announcement-{portal_employee}",
+                "password": "Portal-Test-Password-123!",
+                "enabled": 1,
+                "roles": [{"portal_role": "Employee"}],
+            }
+        ).insert(ignore_permissions=True)
+
+        recipients = {row.name: row.notification_user for row in self.make_announcement().get_target_employees()}
+        self.assertEqual(recipients[portal_employee], f"portal::{portal_employee}")
+
+        announcement = self.make_announcement().insert()
+        announcement.submit()
+        self.assertTrue(
+            frappe.db.exists(
+                "PWA Notification",
+                {
+                    "to_user": f"portal::{portal_employee}",
+                    "reference_document_type": "HR Announcement",
+                    "reference_document_name": announcement.name,
+                },
+            )
+        )
+
     @patch("hr_custom.overrides.pwa_notification.CustomPWANotification.send_push_notification")
     def test_submit_creates_one_notification_per_target(self, _push):
         doc = self.make_announcement().insert()

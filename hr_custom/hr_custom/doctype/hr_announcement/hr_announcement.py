@@ -13,7 +13,7 @@ class HRAnnouncement(Document):
             frappe.throw(_("Select All Employees or add at least one target filter."))
 
     def get_target_employees(self):
-        filters = {"status": "Active", "user_id": ["not in", ["", None]]}
+        filters = {"status": "Active"}
         if not self.all_employees:
             mappings = {
                 "companies": ("company", "company"),
@@ -25,19 +25,46 @@ class HRAnnouncement(Document):
                 values = list(dict.fromkeys(row.get(row_field) for row in self.get(table_field) if row.get(row_field)))
                 if values:
                     filters[employee_field] = ["in", values]
-        return frappe.get_all("Employee", filters=filters, fields=["name", "employee_name", "user_id"], order_by="employee_name asc")
+        employees = frappe.get_all(
+            "Employee",
+            filters=filters,
+            fields=["name", "employee_name", "user_id"],
+            order_by="employee_name asc",
+        )
+        employee_names = [employee.name for employee in employees]
+        portal_credentials = {
+            row.employee: row.name
+            for row in frappe.get_all(
+                "Employee Portal Credential",
+                filters={"employee": ["in", employee_names], "enabled": 1},
+                fields=["name", "employee"],
+            )
+        } if employee_names else {}
+
+        recipients = []
+        for employee in employees:
+            # A linked Frappe user remains the preferred recipient because the
+            # portal resolves that identity first when both login methods exist.
+            employee.notification_user = employee.user_id or (
+                f"portal::{portal_credentials[employee.name]}"
+                if employee.name in portal_credentials else None
+            )
+            if employee.notification_user:
+                recipients.append(employee)
+        return recipients
 
     def on_submit(self):
         recipients = self.get_target_employees()
         if not recipients:
-            frappe.throw(_("No active employees with user accounts match the selected targets."))
+            frappe.throw(_("No active employees with portal access or user accounts match the selected targets."))
         for employee in recipients:
-            key = {"to_user": employee.user_id, "reference_document_type": self.doctype, "reference_document_name": self.name}
+            key = {"to_user": employee.notification_user, "reference_document_type": self.doctype, "reference_document_name": self.name}
             if frappe.db.exists("PWA Notification", key):
                 continue
             notification = frappe.new_doc("PWA Notification")
             notification.from_user = frappe.session.user
-            notification.to_user = employee.user_id
+            notification.to_user = employee.notification_user
+            notification.flags.ignore_links = str(employee.notification_user).startswith("portal::")
             # The relay uses the reference DocType as the push title. Keeping
             # these on separate lines produces: HR Announcement / title / message.
             notification.message = f"{self.title}\n{self.message}"
