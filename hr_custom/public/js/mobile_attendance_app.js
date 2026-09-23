@@ -180,7 +180,7 @@ frappe.ready(() => {
 		startClock(value.server_time);
 		const hour = moment(Date.now() + clockOffset).hour();
 		const greeting = hour < 12 ? __("Good morning") : hour < 18 ? __("Good afternoon") : __("Good evening");
-		setText("greeting", `${greeting}، ${value.employee_name}`);
+		setText("greeting", `${greeting}، ${value.first_name || value.employee_name}`);
 		setText("employee", value.employee_name);
 		setText("branch", value.branch || __("Not assigned"));
 		setText("state", __(value.current_state));
