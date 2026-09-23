@@ -79,9 +79,14 @@ def get_portal_credential(user=None, required=False):
 def authenticate_portal_request():
 	"""Authenticate hr_custom API calls with an independent portal token."""
 	request = getattr(frappe.local, "request", None)
-	if not request or not request.path.startswith("/api/method/hr_custom."):
+	if not request:
 		return
-	if request.path == "/api/method/hr_custom.api.portal_auth.logout":
+	command = (request.args.get("cmd") or getattr(frappe.local.form_dict, "cmd", "") or "").strip()
+	path_command = request.path.removeprefix("/api/method/") if request.path.startswith("/api/method/") else ""
+	command = command or path_command
+	if not command.startswith("hr_custom."):
+		return
+	if command in {"hr_custom.api.portal_auth.login", "hr_custom.api.portal_auth.logout"}:
 		return
 	credential = get_portal_credential()
 	if credential:
