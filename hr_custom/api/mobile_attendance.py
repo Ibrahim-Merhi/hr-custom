@@ -129,12 +129,20 @@ def get_status():
     if not settings.enable_mobile_attendance:
         frappe.throw(_("Mobile attendance is disabled."))
     employee, timestamp = _employee_for_user(), now_datetime()
-    branches, latest = _allowed_branches(employee, settings), _latest(employee.name, getdate(timestamp))
+    configuration_error = None
+    try:
+        branches = _allowed_branches(employee, settings)
+    except frappe.ValidationError as error:
+        # Keep the rest of the employee portal usable when attendance setup is
+        # incomplete. Check-in submission retains strict branch validation.
+        branches = []
+        configuration_error = str(error)
+    latest = _latest(employee.name, getdate(timestamp))
     branch = next((row for row in branches if row.name == employee.branch), branches[0] if branches else None)
     radius = (flt(branch.custom_attendance_radius) if branch else 0) or flt(settings.default_radius)
     maximum_accuracy = (flt(branch.custom_max_gps_accuracy) if branch else 0) or flt(settings.default_max_gps_accuracy)
     require_location = cint(settings.require_geolocation) and not cint(employee.get("custom_location_not_required")) and not cint(branch.custom_allow_checkin_without_location if branch else 0)
-    return {"employee": employee.name, "employee_name": employee.employee_name, "branch": branch.name if branch else None, "allowed_branches": [row.name for row in branches], "server_time": timestamp, "current_state": "CHECKED IN" if latest and latest.log_type == "IN" else "CHECKED OUT", "next_action": "OUT" if latest and latest.log_type == "IN" else "IN", "last_checkin": latest, "branch_location_enabled": bool(branch), "attendance_radius": radius, "maximum_gps_accuracy": maximum_accuracy, "require_geolocation": require_location, "location_cache_seconds": cint(settings.location_cache_seconds) or 120, "fast_location_timeout": cint(settings.fast_location_timeout) or 5, "high_accuracy_timeout": cint(settings.high_accuracy_timeout) or 12, "portal_tabs": {"attendance": cint(settings.show_attendance_tab), "leaves": cint(settings.show_leaves_tab), "salary": cint(settings.show_salary_tab), "profile": cint(settings.show_profile_tab)}}
+    return {"employee": employee.name, "employee_name": employee.employee_name, "branch": branch.name if branch else None, "allowed_branches": [row.name for row in branches], "configuration_error": configuration_error, "server_time": timestamp, "current_state": "CHECKED IN" if latest and latest.log_type == "IN" else "CHECKED OUT", "next_action": "OUT" if latest and latest.log_type == "IN" else "IN", "last_checkin": latest, "branch_location_enabled": bool(branch), "attendance_radius": radius, "maximum_gps_accuracy": maximum_accuracy, "require_geolocation": require_location, "location_cache_seconds": cint(settings.location_cache_seconds) or 120, "fast_location_timeout": cint(settings.fast_location_timeout) or 5, "high_accuracy_timeout": cint(settings.high_accuracy_timeout) or 12, "portal_tabs": {"attendance": cint(settings.show_attendance_tab), "leaves": cint(settings.show_leaves_tab), "salary": cint(settings.show_salary_tab), "profile": cint(settings.show_profile_tab)}}
 
 
 @frappe.whitelist()

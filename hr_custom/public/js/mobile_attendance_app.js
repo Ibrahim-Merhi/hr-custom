@@ -195,6 +195,13 @@ frappe.ready(() => {
 		});
 		updateTabColumns();
 		byId("location-info-button")?.classList.toggle("not-required", !value.require_geolocation);
+		if (value.configuration_error) {
+			setText("location-title", __("Attendance setup required"));
+			setText("location", value.configuration_error);
+			byId("action").disabled = true;
+			feedback(value.configuration_error, "error");
+			return;
+		}
 		if (!value.require_geolocation) {
 			setText("location-title", __("Location not required"));
 			setText("location", __("Your attendance policy allows check-in without GPS."));
@@ -974,7 +981,6 @@ frappe.ready(() => {
 	}
 	byId("attendance-to").value = moment().format("YYYY-MM-DD");
 	byId("attendance-from").value = moment().startOf("month").format("YYYY-MM-DD");
-	locate(false);
 	refresh(false);
 	loadNotifications();
 	loadApprovals(true);
