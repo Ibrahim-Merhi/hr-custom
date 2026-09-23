@@ -33,11 +33,19 @@ async function load_employee_hr_history(frm) {
 			method: "hr_custom.services.employee_profile.get_employee_hr_history",
 			args: { employee: frm.doc.name }
 		});
+		const leaveRows = (message.balances || []).map(row => {
+			const used = flt(row.used);
+			const usedValue = used > 0
+				? `<a href="#" class="used-leaves-link" data-employee="${history_cell(frm.doc.name)}" data-leave-type="${history_cell(row.leave_type)}" data-from-date="${history_cell(row.from_date)}" data-to-date="${history_cell(row.to_date)}" title="${__("Open used leave applications")}">${history_cell(row.used)}</a>`
+				: history_cell(row.used);
+			return `<tr><td>${history_cell(row.leave_type)}</td><td>${history_cell(__(row.unit))}</td><td>${history_cell(row.allocated)}</td><td>${usedValue}</td><td class="text-success"><b>${history_cell(row.remaining)}</b></td><td>${history_cell(frappe.datetime.str_to_user(row.from_date))} – ${history_cell(frappe.datetime.str_to_user(row.to_date))}</td></tr>`;
+		});
 		set_history_html(leaveField, render_history_table(
 			[__("Leave Type"), __("Unit"), __("Total Allocated Leaves"), __("Used Leaves"), __("Available Leaves"), __("Period")],
-			(message.balances || []).map(row => `<tr><td>${history_cell(row.leave_type)}</td><td>${history_cell(__(row.unit))}</td><td>${history_cell(row.allocated)}</td><td>${history_cell(row.used)}</td><td class="text-success"><b>${history_cell(row.remaining)}</b></td><td>${history_cell(frappe.datetime.str_to_user(row.from_date))} – ${history_cell(frappe.datetime.str_to_user(row.to_date))}</td></tr>`),
+			leaveRows,
 			__("No active leave allocations were found for this employee.")
 		));
+		bind_used_leave_links(leaveField);
 		set_history_html(attendanceField, render_history_table(
 			[__("Date"), __("Status"), __("Check In"), __("Check Out"), __("Hours"), __("Check-in Branch"), __("Check-out Branch")],
 			(message.attendance || []).map(row => `<tr><td><a href="/app/attendance/${encodeURIComponent(row.name)}">${history_cell(frappe.datetime.str_to_user(row.attendance_date))}</a></td><td>${history_cell(__(row.status))}</td><td>${history_cell(row.in_time ? frappe.datetime.str_to_user(row.in_time) : null)}</td><td>${history_cell(row.out_time ? frappe.datetime.str_to_user(row.out_time) : null)}</td><td>${history_cell(Number(row.working_hours || 0).toFixed(2))}</td><td>${history_cell(row.custom_check_in_branch)}</td><td>${history_cell(row.custom_check_out_branch)}</td></tr>`),
@@ -48,6 +56,23 @@ async function load_employee_hr_history(frm) {
 		set_history_html(leaveField, failed);
 		set_history_html(attendanceField, failed);
 	}
+}
+
+function bind_used_leave_links(field) {
+	field.$wrapper.off("click.hr_custom_used_leave", ".used-leaves-link");
+	field.$wrapper.on("click.hr_custom_used_leave", ".used-leaves-link", function (event) {
+		event.preventDefault();
+		const link = this.dataset;
+		frappe.route_options = {
+			employee: link.employee,
+			leave_type: link.leaveType,
+			status: "Approved",
+			docstatus: 1,
+			from_date: ["<=", link.toDate],
+			to_date: [">=", link.fromDate],
+		};
+		frappe.set_route("List", "Leave Application");
+	});
 }
 
 function set_history_html(field, html) {
