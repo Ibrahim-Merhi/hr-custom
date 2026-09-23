@@ -77,6 +77,7 @@ class HourlyLeaveApplication(LeaveApplication):
 
     def on_submit(self):
         if self.is_historical_migration():
+            self.create_leave_ledger_entry()
             return
         return super().on_submit()
 
@@ -96,6 +97,24 @@ class HourlyLeaveApplication(LeaveApplication):
 
     def create_leave_ledger_entry(self, submit=True):
         if self.is_historical_migration():
+            deduction = flt(self.custom_legacy_balance_deducted)
+            if not deduction:
+                deduction = (
+                    flt(self.custom_leave_hours)
+                    if self.custom_leave_unit == "Hours"
+                    else flt(self.total_leave_days)
+                )
+            args = {
+                "leaves": -abs(deduction),
+                "from_date": self.from_date,
+                "to_date": self.to_date,
+                "is_lwp": frappe.db.get_value("Leave Type", self.leave_type, "is_lwp"),
+                "holiday_list": get_holiday_list_for_employee(
+                    self.employee, raise_exception=False
+                ) or "",
+            }
+            if deduction or not submit:
+                create_leave_ledger_entry(self, args, submit)
             return
         if get_leave_unit(self.leave_type) != "Hours":
             return super().create_leave_ledger_entry(submit)
@@ -125,3 +144,22 @@ class HourlyLeaveApplication(LeaveApplication):
         if get_leave_unit(self.leave_type) == "Hours":
             return
         return super().cancel_attendance()
+
+
+def backfill_migrated_leave_ledgers():
+    """Create missing ledger deductions for migrated applications imported before this fix."""
+    applications = frappe.get_all(
+        "Leave Application",
+        filters={MIGRATED_RECORD_FIELD: 1, "status": "Approved", "docstatus": 1},
+        pluck="name",
+    )
+    created = []
+    for name in applications:
+        if frappe.db.exists(
+            "Leave Ledger Entry",
+            {"transaction_type": "Leave Application", "transaction_name": name, "docstatus": 1},
+        ):
+            continue
+        frappe.get_doc("Leave Application", name).create_leave_ledger_entry()
+        created.append(name)
+    return {"created": created, "count": len(created)}

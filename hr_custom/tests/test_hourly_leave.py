@@ -3,7 +3,7 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import flt, getdate
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
-from hrms.hr.doctype.leave_application.leave_application import OverlapError
+from hrms.hr.doctype.leave_application.leave_application import OverlapError, get_leave_balance_on
 
 from hr_custom.overrides.leave_application import HourlyLeaveApplication
 from hr_custom.api.hourly_leave import get_hourly_leave_preview
@@ -195,10 +195,62 @@ class TestHourlyLeave(FrappeTestCase):
         self.assertEqual(app.custom_legacy_voucher_number, "LEGACY-TEST-001")
 
         app.submit()
-        self.assertFalse(
-            frappe.db.exists(
-                "Leave Ledger Entry", {"transaction_name": app.name, "docstatus": 1}
-            )
+        ledger_hours = frappe.db.get_value(
+            "Leave Ledger Entry",
+            {"transaction_name": app.name, "docstatus": 1},
+            "leaves",
+        )
+        self.assertEqual(flt(ledger_hours), -5.5)
+
+    def test_migrated_day_leave_reduces_current_allocation_balance(self):
+        frappe.db.set_value(
+            "Employment Type", self.employment_type, "custom_leave_calculation_mode", "Both"
+        )
+        day_type = self._make_leave_type("Days", " Migrated Balance")
+        frappe.get_doc({
+            "doctype": "Leave Allocation",
+            "employee": self.employee,
+            "leave_type": day_type,
+            "from_date": "2026-01-01",
+            "to_date": "2026-12-31",
+            "new_leaves_allocated": 15,
+        }).insert().submit()
+        app = frappe.get_doc({
+            "doctype": "Leave Application",
+            "employee": self.employee,
+            "leave_type": day_type,
+            "from_date": "2026-09-21",
+            "to_date": "2026-09-21",
+            "posting_date": "2026-09-23",
+            "status": "Approved",
+            "description": "Migrated current-period leave",
+            "total_leave_days": 1,
+            "custom_is_migrated_record": 1,
+            "custom_leave_unit": "Days",
+            "custom_legacy_balance_deducted": 1,
+            "custom_legacy_voucher_number": "LEGACY-CURRENT-BALANCE-001",
+        }).insert().submit()
+
+        self.assertEqual(
+            flt(
+                get_leave_balance_on(
+                    self.employee,
+                    day_type,
+                    getdate("2026-09-23"),
+                    consider_all_leaves_in_the_allocation_period=True,
+                )
+            ),
+            14,
+        )
+        self.assertEqual(
+            flt(
+                frappe.db.get_value(
+                    "Leave Ledger Entry",
+                    {"transaction_name": app.name, "docstatus": 1},
+                    "leaves",
+                )
+            ),
+            -1,
         )
 
     def test_historical_migration_rejects_duplicate_legacy_voucher(self):
