@@ -230,3 +230,97 @@ Install on iPhone or iPad,التثبيت على آيفون أو آيباد,
 Powered by Avraham,بدعم من Avraham,
 Location status,حالة الموقع,
 Show password,إظهار كلمة المرور,
+
+A complete check-in and check-out pair is required.,يلزم وجود سجل دخول وخروج مكتمل.
+Announcement,إعلان
+Archive,أرشفة
+Are you sure you want to log out of the Employee HR Portal?,هل أنت متأكد من تسجيل الخروج من بوابة الموظف؟
+Attendance correction,تصحيح الحضور
+Attendance setup required,إعداد الحضور مطلوب
+Checking GPS and branch geofence…,جارٍ التحقق من GPS والنطاق الجغرافي للفرع…
+Could not change language,تعذر تغيير اللغة
+Could not enable notifications.,تعذر تفعيل الإشعارات.
+Could not load leave types,تعذر تحميل أنواع الإجازات
+Could not record attendance,تعذر تسجيل الحضور
+Could not register this phone for notifications.,تعذر تسجيل هذا الهاتف لتلقي الإشعارات.
+Could not update correction,تعذر تحديث طلب التصحيح
+Could not update leave request,تعذر تحديث طلب الإجازة
+Could not update notification,تعذر تحديث الإشعار
+Date,التاريخ
+Delete,حذف
+Delete notification?,حذف الإشعار؟
+Enabling notifications…,جارٍ تفعيل الإشعارات…
+Final Approve & Apply,الموافقة النهائية والتطبيق
+Final Approve & Submit,الموافقة النهائية والإرسال
+Final HR,الموارد البشرية النهائية
+Final HR approval,الموافقة النهائية للموارد البشرية
+GPS requires HTTPS and location support on this device.,يتطلب GPS اتصال HTTPS ودعم الموقع على هذا الجهاز.
+Got it,حسناً
+Gross,الإجمالي
+HR Override,تجاوز الموارد البشرية
+HR Override & Apply,تجاوز الموارد البشرية والتطبيق
+HR Override Note,ملاحظة تجاوز الموارد البشرية
+HR must configure a Leave Approver on your employee profile.,يجب على الموارد البشرية تعيين معتمد إجازات في ملفك الوظيفي.
+HR must create and submit a Leave Allocation for you before you can request leave.,يجب على الموارد البشرية إنشاء رصيد إجازة واعتماده قبل أن تتمكن من طلب إجازة.
+Hide password,إخفاء كلمة المرور
+Loading attendance details…,جارٍ تحميل تفاصيل الحضور…
+Loading attendance…,جارٍ تحميل الحضور…
+Loading correction request…,جارٍ تحميل طلب التصحيح…
+Loading leave request…,جارٍ تحميل طلب الإجازة…
+Locked-screen notifications are not supported by this browser.,هذا المتصفح لا يدعم إشعارات شاشة القفل.
+Locked-screen notifications enabled,تم تفعيل إشعارات شاشة القفل
+Log Out,تسجيل الخروج
+Log out?,تسجيل الخروج؟
+New HR notification,إشعار جديد من الموارد البشرية
+No active leave allocations found.,لا توجد أرصدة إجازات فعالة.
+No approval steps,لا توجد مراحل موافقة
+No approved leave usage found.,لا يوجد استخدام إجازات معتمد.
+No attendance found for this filter.,لا توجد سجلات حضور مطابقة لهذا المرشح.
+No available leave allocation,لا يوجد رصيد إجازة متاح
+No correction requested,لم يتم طلب تصحيح
+No information available.,لا توجد معلومات متاحة.
+No leave requests found.,لا توجد طلبات إجازة.
+No notifications in this category.,لا توجد إشعارات في هذه الفئة.
+No punches recorded,لا توجد سجلات دخول أو خروج
+No requests are waiting for your approval.,لا توجد طلبات بانتظار موافقتك.
+No submitted salary slips found.,لا توجد قسائم راتب معتمدة.
+Not assigned,غير معيّن
+Notification permission was not granted. Enable it in phone Settings.,لم يتم منح إذن الإشعارات. فعّله من إعدادات الهاتف.
+Notification service is unavailable.,خدمة الإشعارات غير متاحة.
+"On iPhone, install this app on the Home Screen first, then enable notifications.","على آيفون ثبّت التطبيق على الشاشة الرئيسية أولاً ثم فعّل الإشعارات."
+Outside the allowed work location,خارج موقع العمل المسموح
+Recorded Hours,الساعات المسجلة
+Recorded hours do not yet meet the required hours.,الساعات المسجلة لا تستوفي الساعات المطلوبة بعد.
+Refresh,تحديث
+Reject leave request?,رفض طلب الإجازة؟
+Request failed.,فشل الطلب.
+Required Hours,الساعات المطلوبة
+Restore,استعادة
+Scheduled Work Period,فترة العمل المجدولة
+Sent to HR,أُرسل إلى الموارد البشرية
+Tap to read,اضغط للقراءة
+The GPS request timed out. Move to an open area and retry.,انتهت مهلة طلب GPS. انتقل إلى مكان مفتوح وأعد المحاولة.
+The approver step is complete. The request is still unsubmitted and is now waiting for final HR approval.,اكتملت مرحلة المعتمد. لا يزال الطلب غير معتمد وهو الآن بانتظار الموافقة النهائية للموارد البشرية.
+This decision will end the approval process.,سيُنهي هذا القرار مسار الموافقات.
+This final action will submit and apply the attendance correction. Continue?,سيؤدي هذا الإجراء النهائي إلى اعتماد تصحيح الحضور وتطبيقه. هل تريد المتابعة؟
+This notification will be removed permanently.,سيتم حذف هذا الإشعار نهائياً.
+This phone is ready to receive HR notifications.,هذا الهاتف جاهز لتلقي إشعارات الموارد البشرية.
+Use your browser menu and select Install app or Add to Home screen.,استخدم قائمة المتصفح واختر تثبيت التطبيق أو الإضافة إلى الشاشة الرئيسية.
+Waiting for HR,بانتظار الموارد البشرية
+Why it is pending,سبب بقائه معلقاً
+Your approval,موافقتك
+Your location is currently unavailable.,موقعك غير متاح حالياً.
+Your request was sent to the attendance approver.,تم إرسال طلبك إلى معتمد الحضور.
+hours,ساعات
+Only English and Arabic are supported in the employee portal.,تدعم بوابة الموظف اللغتين الإنجليزية والعربية فقط.
+Draft,مسودة
+Pending,معلّق
+Submitted,معتمد
+Cancelled,ملغى
+On Leave,في إجازة
+Open,مفتوح
+Closed,مغلق
+Correction submitted,تم إرسال طلب التصحيح
+Location permission was denied. Enable Location for this site in phone Settings.,تم رفض إذن الموقع. فعّل الموقع لهذا الموقع من إعدادات الهاتف.
+"Leave request {0} for {1} sent to {2} approver(s). Return to work: {3}.","تم إرسال طلب الإجازة {0} لمدة {1} إلى {2} من المعتمدين. العودة إلى العمل: {3}."
+"You are currently about {0} from {1}.\n\nTo record attendance, move within {2} of this branch, then try again.","أنت حالياً على بُعد نحو {0} من {1}.\n\nلتسجيل الحضور، انتقل إلى مسافة لا تتجاوز {2} من هذا الفرع ثم أعد المحاولة."
