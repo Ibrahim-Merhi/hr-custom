@@ -132,7 +132,6 @@ frappe.ready(() => {
 	let locatingPromise = null;
 	let historyLoaded = false;
 	let appRefreshing = false;
-	let backgroundRefreshTimer = null;
 	const loadedSections = new Set();
 	let deviceId = localStorage.getItem("hr_mobile_device_id");
 	if (!deviceId) {
@@ -508,11 +507,7 @@ frappe.ready(() => {
 		window.scrollTo({top: 0, behavior: "smooth"});
 	}
 
-	function overlayIsOpen() {
-		return Boolean(document.querySelector(".app-dialog:not(.is-hidden),.notification-sheet:not(.is-hidden),.leave-sheet:not(.is-hidden),.install-sheet:not(.is-hidden)"));
-	}
-
-	async function refreshApp({background = false, reacquireLocation = false} = {}) {
+	async function refreshApp({reacquireLocation = false} = {}) {
 		if (appRefreshing || !authenticated) return;
 		appRefreshing = true;
 		const button = byId("refresh-button");
@@ -959,17 +954,6 @@ frappe.ready(() => {
 	};
 	installButtons.forEach((button) => { button.onclick = requestInstall; });
 	byId("sheet-close").onclick = () => closeSheet(byId("ios-install-sheet"));
-	const requestBackgroundRefresh = () => {
-		clearTimeout(backgroundRefreshTimer);
-		backgroundRefreshTimer = setTimeout(() => {
-			if (document.visibilityState === "visible" && !overlayIsOpen() && !busy) refreshApp({background: true});
-		}, 350);
-	};
-	setInterval(requestBackgroundRefresh, 30000);
-	document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") requestBackgroundRefresh(); });
-	window.addEventListener("focus", requestBackgroundRefresh);
-	window.addEventListener("online", requestBackgroundRefresh);
-	if (frappe.realtime?.on) frappe.realtime.on("notification", requestBackgroundRefresh);
 	if ("serviceWorker" in navigator && window.isSecureContext) {
 		navigator.serviceWorker.getRegistrations().then(async (registrations) => {
 			for (const registration of registrations) {
