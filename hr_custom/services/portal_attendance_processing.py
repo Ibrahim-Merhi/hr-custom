@@ -64,16 +64,25 @@ def finalize_completed_day(employee, attendance_date):
                 frappe.db.set_value("Employee Checkin", row.name, "attendance", existing, update_modified=False)
         return frappe.get_doc("Attendance", existing)
 
-    from hrms.hr.doctype.employee_checkin.employee_checkin import mark_attendance_and_link_log
-    return mark_attendance_and_link_log(
-        logs,
-        "Present",
-        attendance_date,
-        working_hours=worked,
-        in_time=first_in.time,
-        out_time=last_out.time,
-        shift=shift,
+    attendance = frappe.new_doc("Attendance")
+    attendance.update(
+        {
+            "employee": employee,
+            "attendance_date": attendance_date,
+            "status": "Present",
+            "working_hours": worked,
+            "in_time": first_in.time,
+            "out_time": last_out.time,
+            "shift": shift,
+        }
     )
+    # Ownership was verified above. Bypass only the document role check for
+    # this server-created Attendance; normal Attendance validation still runs.
+    attendance.flags.ignore_permissions = True
+    attendance.submit()
+    for row in logs:
+        frappe.db.set_value("Employee Checkin", row.name, "attendance", attendance.name, update_modified=False)
+    return attendance
 
 
 def reconcile_recent_completed_pairs(days=3):
