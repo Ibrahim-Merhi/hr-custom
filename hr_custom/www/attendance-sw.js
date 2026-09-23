@@ -1,5 +1,5 @@
-const CACHE="employee-portal-v46";
-const ASSETS=["/assets/hr_custom/js/mobile_attendance_app.js?v=50","/assets/hr_custom/js/attendance_session_guard.js?v=9","/assets/hr_custom/attendance-manifest.json?v=4","/assets/hr_custom/images/attendance-icon-192.png?v=3","/assets/hr_custom/images/attendance-icon-512.png?v=3","/assets/hr_custom/images/apple-touch-icon.png?v=3"];
+const CACHE="employee-portal-v47";
+const ASSETS=["/assets/hr_custom/js/mobile_attendance_app.js?v=50","/assets/hr_custom/js/attendance_session_guard.js?v=10","/assets/hr_custom/attendance-manifest.json?v=4","/assets/hr_custom/images/attendance-icon-192.png?v=3","/assets/hr_custom/images/attendance-icon-512.png?v=3","/assets/hr_custom/images/apple-touch-icon.png?v=3"];
 try {
   importScripts("https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js", "https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js");
   firebase.initializeApp({projectId:"hrms-c9607",appId:"1:1070897371877:web:327fde68828fe1c1d4920c",storageBucket:"hrms-c9607.appspot.com",apiKey:"AIzaSyAGb3fCLia5j3yNpSYe5Khoq3hlbRTGSpA",authDomain:"hrms-c9607.firebaseapp.com",messagingSenderId:"1070897371877"});
