@@ -17,6 +17,7 @@ doctype_js={
     "Employment Type":"public/js/work_schedule.js",
     "Employee":["public/js/work_schedule.js", "public/js/employee_bilingual_name.js"],
 }
+doctype_list_js={"Leave Application":"public/js/hourly_leave_application_list.js"}
 before_install="hr_custom.install.before_install"
 before_migrate="hr_custom.install.before_migrate"
 # Custom fields reference DocTypes shipped by this app. Run their setup only

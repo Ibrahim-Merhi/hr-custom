@@ -10,9 +10,11 @@ HR_ROLES = {"HR User", "HR Manager", "System Manager"}
 def _check_employee_access(employee: str):
     if frappe.session.user == "Guest":
         frappe.throw(_("Please log in."), frappe.PermissionError)
+    if HR_ROLES.intersection(frappe.get_roles()):
+        return
     from hr_custom.services.portal_identity import get_portal_employee
     own_employee = get_portal_employee(fields=["name"]).name
-    if employee != own_employee and not HR_ROLES.intersection(frappe.get_roles()):
+    if employee != own_employee:
         frappe.throw(_("You are not permitted to view this employee's leave information."), frappe.PermissionError)
 
 

@@ -1,11 +1,19 @@
 frappe.ui.form.on("Leave Application", {
 	refresh(frm) {
 		set_hourly_visibility(frm);
+		if (is_migrated_record(frm)) {
+			setup_leave_approval_actions(frm);
+			return;
+		}
 		if (frm.doc.leave_type) refresh_leave_unit(frm);
 		setup_leave_approval_actions(frm);
 	},
 	employee: schedule_hourly_preview,
 	leave_type(frm) {
+		if (is_migrated_record(frm)) {
+			set_hourly_visibility(frm);
+			return;
+		}
 		refresh_leave_unit(frm);
 	},
 	from_date: schedule_hourly_preview,
@@ -13,6 +21,10 @@ frappe.ui.form.on("Leave Application", {
 	custom_leave_duration: schedule_hourly_preview,
 	custom_partial_hours: schedule_hourly_preview,
 });
+
+function is_migrated_record(frm) {
+	return Number(frm.doc.custom_is_migrated_record || 0) === 1;
+}
 
 function setup_leave_approval_actions(frm) {
 	if (frm.is_new()) return;
@@ -73,11 +85,13 @@ function set_hourly_visibility(frm) {
 	const hourly = frm.doc.custom_leave_unit === "Hours";
 	frm.toggle_display("half_day", !hourly);
 	frm.toggle_display("half_day_date", !hourly);
+	frm.toggle_display("total_leave_days", !hourly);
 	frm.set_df_property("total_leave_days", "description", hourly ? __("Eligible scheduled dates; balance is deducted in hours.") : "");
 }
 
 const run_hourly_preview = frappe.utils.debounce((frm) => {
 	if (
+		is_migrated_record(frm) ||
 		frm.doc.custom_leave_unit !== "Hours" ||
 		![frm.doc.employee, frm.doc.leave_type, frm.doc.from_date, frm.doc.to_date].every(Boolean)
 	) return;
