@@ -163,6 +163,79 @@ class TestHourlyLeave(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             self._application("2027-01-05").insert()
 
+    def test_historical_migration_preserves_imported_values_and_skips_current_policy(self):
+        frappe.db.set_value(
+            "Employment Type", self.employment_type, "custom_leave_calculation_mode", "Days"
+        )
+        app = frappe.get_doc({
+            "doctype": "Leave Application",
+            "employee": self.employee,
+            "leave_type": self.leave_type,
+            "from_date": "2024-03-10",
+            "to_date": "2024-03-11",
+            "posting_date": "2024-03-10",
+            "status": "Open",
+            "description": "Historical migration test",
+            "custom_is_migrated_record": 1,
+            "custom_leave_unit": "Hours",
+            "custom_leave_duration": "Partial Hours",
+            "custom_partial_hours": 5.5,
+            "custom_leave_hours": 5.5,
+            "custom_legacy_voucher_number": " LEGACY-TEST-001 ",
+            "custom_legacy_balance_deducted": 5.5,
+            "custom_legacy_period_starting": "2024-01-01",
+        }).insert()
+
+        self.assertEqual(app.status, "Approved")
+        self.assertEqual(app.custom_leave_unit, "Hours")
+        self.assertEqual(flt(app.custom_partial_hours), 5.5)
+        self.assertEqual(flt(app.custom_leave_hours), 5.5)
+        self.assertEqual(flt(app.custom_legacy_balance_deducted), 5.5)
+        self.assertEqual(getdate(app.custom_legacy_period_starting), getdate("2024-01-01"))
+        self.assertEqual(app.custom_legacy_voucher_number, "LEGACY-TEST-001")
+
+        app.submit()
+        self.assertFalse(
+            frappe.db.exists(
+                "Leave Ledger Entry", {"transaction_name": app.name, "docstatus": 1}
+            )
+        )
+
+    def test_historical_migration_rejects_duplicate_legacy_voucher(self):
+        values = {
+            "doctype": "Leave Application",
+            "employee": self.employee,
+            "leave_type": self.leave_type,
+            "from_date": "2023-06-01",
+            "to_date": "2023-06-01",
+            "posting_date": "2023-06-01",
+            "status": "Approved",
+            "description": "Historical duplicate test",
+            "custom_is_migrated_record": 1,
+            "custom_leave_unit": "Hours",
+            "custom_leave_hours": 2,
+            "custom_legacy_voucher_number": "LEGACY-DUPLICATE-001",
+        }
+        frappe.get_doc(values).insert()
+        with self.assertRaises(frappe.ValidationError):
+            frappe.get_doc(values).insert()
+
+    def test_historical_migration_is_limited_to_2022_through_2026(self):
+        app = frappe.get_doc({
+            "doctype": "Leave Application",
+            "employee": self.employee,
+            "leave_type": self.leave_type,
+            "from_date": "2021-12-31",
+            "to_date": "2022-01-01",
+            "posting_date": "2022-01-01",
+            "status": "Approved",
+            "description": "Out of migration range",
+            "custom_is_migrated_record": 1,
+            "custom_legacy_voucher_number": "LEGACY-OUT-OF-RANGE",
+        })
+        with self.assertRaises(frappe.ValidationError):
+            app.insert()
+
     def test_day_leave_uses_standard_hrms(self):
         day_type = self._make_leave_type("Days", " Regression")
         frappe.db.set_value("Employment Type", self.employment_type, "custom_leave_calculation_mode", "Both")
