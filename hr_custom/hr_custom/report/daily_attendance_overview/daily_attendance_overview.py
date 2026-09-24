@@ -87,8 +87,6 @@ def _employees(filters, start, end):
 
 def _columns():
 	return [
-		{"label": _("Employee"), "fieldname": "employee", "fieldtype": "Link", "options": "Employee", "width": 130},
-		{"label": _("Attendance ID"), "fieldname": "attendance_device_id", "width": 110},
 		{"label": _("Employee Name"), "fieldname": "employee_name", "width": 190},
 		{"label": _("Date"), "fieldname": "date", "fieldtype": "Date", "width": 105},
 		{"label": _("Day"), "fieldname": "day", "width": 100},
