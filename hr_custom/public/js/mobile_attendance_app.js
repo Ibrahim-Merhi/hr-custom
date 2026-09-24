@@ -789,6 +789,7 @@ frappe.ready(() => {
 			message.textContent = __("Leave request {0} for {1} sent to {2} approver(s). Return to work: {3}.", [result.name, amount, formatNumber(result.approver_count), portalDate(result.return_to_work_date, {day: "numeric", month: "long", year: "numeric"})]);
 			byId("simple-leave-form").reset();
 			loadedSections.delete("leaves");
+			await loadLeaves(true);
 			setTimeout(closeLeaveRequest, 1600);
 		} catch (error) {
 			if (submissionSequence !== leaveSubmissionSequence) return;
