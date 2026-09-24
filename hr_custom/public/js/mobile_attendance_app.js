@@ -677,7 +677,25 @@ frappe.ready(() => {
 		closeSheet(byId("notification-sheet"));
 	}
 
+	let leaveSubmissionSequence = 0;
+	function resetLeaveSubmitState(clearMessage = true) {
+		leaveSubmissionSequence += 1;
+		const button = byId("submit-leave-request");
+		if (button) {
+			button.disabled = false;
+			button.textContent = __("Send Leave Request");
+		}
+		if (clearMessage) {
+			const message = byId("leave-message");
+			if (message) {
+				message.className = "feedback";
+				message.textContent = "";
+			}
+		}
+	}
+
 	async function openLeaveRequest() {
+		resetLeaveSubmitState();
 		const today = moment().format("YYYY-MM-DD");
 		if (!byId("leave-from-date").value) byId("leave-from-date").value = today;
 		if (!byId("leave-to-date").value) byId("leave-to-date").value = byId("leave-from-date").value;
@@ -687,6 +705,7 @@ frappe.ready(() => {
 	}
 
 	function closeLeaveRequest() {
+		resetLeaveSubmitState();
 		closeSheet(byId("leave-sheet"));
 	}
 
@@ -754,12 +773,17 @@ frappe.ready(() => {
 		event.preventDefault();
 		const button = byId("submit-leave-request");
 		const message = byId("leave-message");
+		const submissionSequence = ++leaveSubmissionSequence;
 		button.disabled = true;
 		button.textContent = __("Sending…");
 		message.className = "feedback";
 		message.textContent = __("Selecting your leave allocation and approver…");
 		try {
-			const result = await api("hr_custom.services.simple_leave.submit_simple_leave", {from_date: byId("leave-from-date").value, to_date: byId("leave-to-date").value, reason: byId("leave-reason").value, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value});
+			const result = await Promise.race([
+				api("hr_custom.services.simple_leave.submit_simple_leave", {from_date: byId("leave-from-date").value, to_date: byId("leave-to-date").value, reason: byId("leave-reason").value, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value}),
+				new Promise((_, reject) => setTimeout(() => reject(new Error(__("The leave request timed out. Please try again."))), 20000)),
+			]);
+			if (submissionSequence !== leaveSubmissionSequence) return;
 			message.className = "feedback success";
 			const amount = result.leave_unit === "Hours" ? __("{0} hours", [result.leave_hours]) : __("{0} days", [result.leave_days]);
 			message.textContent = __("Leave request {0} for {1} sent to {2} approver(s). Return to work: {3}.", [result.name, amount, formatNumber(result.approver_count), portalDate(result.return_to_work_date, {day: "numeric", month: "long", year: "numeric"})]);
@@ -767,11 +791,11 @@ frappe.ready(() => {
 			loadedSections.delete("leaves");
 			setTimeout(closeLeaveRequest, 1600);
 		} catch (error) {
+			if (submissionSequence !== leaveSubmissionSequence) return;
 			message.className = "feedback error";
 			message.textContent = error.message;
 		} finally {
-			button.disabled = false;
-			button.textContent = __("Send Leave Request");
+			if (submissionSequence === leaveSubmissionSequence) resetLeaveSubmitState(false);
 		}
 	}
 
@@ -919,9 +943,9 @@ frappe.ready(() => {
 	byId("open-leave-request").onclick = openLeaveRequest;
 	byId("leave-sheet-close").onclick = closeLeaveRequest;
 	byId("leave-sheet").addEventListener("click", (event) => { if (event.target === byId("leave-sheet")) closeLeaveRequest(); });
-	byId("leave-from-date").addEventListener("change", () => { if (!byId("leave-to-date").value || byId("leave-to-date").value < byId("leave-from-date").value) byId("leave-to-date").value = byId("leave-from-date").value; byId("leave-to-date").min = byId("leave-from-date").value; });
+	byId("leave-from-date").addEventListener("change", () => { resetLeaveSubmitState(); if (!byId("leave-to-date").value || byId("leave-to-date").value < byId("leave-from-date").value) byId("leave-to-date").value = byId("leave-from-date").value; byId("leave-to-date").min = byId("leave-from-date").value; });
 	byId("leave-from-date").addEventListener("change", scheduleLeavePreview);
-	byId("leave-to-date").addEventListener("change", () => { loadAvailableLeaveTypes(); scheduleLeavePreview(); });
+	byId("leave-to-date").addEventListener("change", () => { resetLeaveSubmitState(); loadAvailableLeaveTypes(); scheduleLeavePreview(); });
 	byId("leave-from-date").addEventListener("change", loadAvailableLeaveTypes);
 	byId("leave-type").addEventListener("change", updateSelectedLeaveType);
 	byId("leave-duration").addEventListener("change", updateHourlyFields);
