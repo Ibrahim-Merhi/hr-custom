@@ -135,6 +135,7 @@ frappe.ready(() => {
 	let historyLoaded = false;
 	let appRefreshing = false;
 	const loadedSections = new Set();
+	let leavesLoadPromise = null;
 	let deviceId = localStorage.getItem("hr_mobile_device_id");
 	if (!deviceId) {
 		deviceId = window.crypto && typeof window.crypto.randomUUID === "function" ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -349,22 +350,41 @@ frappe.ready(() => {
 	async function loadLeaves(force = false) {
 		if (!force && loadedSections.has("leaves")) return;
 		const balances = byId("leave-balances"), requests = byId("leave-requests");
-		try {
-			const data = await api("hr_custom.api.mobile_attendance.get_leave_portal_data");
-			balances.innerHTML = data.balances.length ? data.balances.map((row) => `<div class="balance-row"><div class="balance-title"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><strong>${formatNumber(row.remaining)} ${__(row.unit === "Hours" ? "hours remaining" : "days remaining")}</strong></div><div class="balance-numbers"><div class="used-leave-link" data-leave-type="${frappe.utils.escape_html(row.leave_type)}"><span>${__("Used")}</span><strong>${formatNumber(row.used)}</strong></div><div><span>${__("Allocated")}</span><strong>${formatNumber(row.allocated)}</strong></div></div></div>`).join("") : `<div class="history-loading">${__("No active leave allocations found.")}</div>`;
-			requests.innerHTML = data.requests.length ? data.requests.map((row) => `<div class="leave-row" data-leave="${frappe.utils.escape_html(row.name)}"><div class="row-between"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><span class="status-pill">${frappe.utils.escape_html(__(row.status))}</span></div><span class="row-subtle">${portalDate(row.from_date)} – ${portalDate(row.to_date)} · ${formatNumber(row.custom_leave_unit === "Hours" ? row.custom_leave_hours : row.total_leave_days)} ${__(row.custom_leave_unit === "Hours" ? "hours" : "days")}</span></div>`).join("") : `<div class="history-loading">${__("No leave requests found.")}</div>`;
-			requests.querySelectorAll("[data-leave]").forEach((row) => row.onclick = () => openLeaveDetail(row.dataset.leave));
-			balances.querySelectorAll(".used-leave-link").forEach((used) => used.onclick = () => {
-				const matching = data.requests.filter((row) => row.leave_type === used.dataset.leaveType && row.status === "Approved");
-				if (matching.length === 1) openLeaveDetail(matching[0].name);
-				else {
-					requests.innerHTML = matching.length ? matching.map((row) => `<div class="leave-row" data-leave="${frappe.utils.escape_html(row.name)}"><div class="row-between"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><span class="status-pill">${frappe.utils.escape_html(__(row.status))}</span></div><span class="row-subtle"><bdi>${portalDate(row.from_date)} – ${portalDate(row.to_date)}</bdi></span></div>`).join("") : `<div class="history-loading">${__("No approved leave usage found.")}</div>`;
-					requests.querySelectorAll("[data-leave]").forEach((row) => row.onclick = () => openLeaveDetail(row.dataset.leave));
-					byId("leave-requests").closest("details").open = true;
-				}
-			});
-			loadedSections.add("leaves");
-		} catch (error) { balances.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
+		if (!balances || !requests) return;
+		if (leavesLoadPromise) return leavesLoadPromise;
+		balances.innerHTML = `<div class="history-loading">${__("Loading leave balances…")}</div>`;
+		requests.innerHTML = `<div class="history-loading">${__("Loading leave requests…")}</div>`;
+		leavesLoadPromise = (async () => {
+			try {
+				const data = await Promise.race([
+					api("hr_custom.api.mobile_attendance.get_leave_portal_data"),
+					new Promise((_, reject) => setTimeout(() => reject(new Error(__("The leave data request timed out. Tap Leaves to try again."))), 20000)),
+				]);
+				if (!data || !Array.isArray(data.balances) || !Array.isArray(data.requests)) throw new Error(__("The server returned an invalid leave response. Tap Leaves to try again."));
+				balances.innerHTML = data.balances.length ? data.balances.map((row) => `<div class="balance-row"><div class="balance-title"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><strong>${formatNumber(row.remaining)} ${__(row.unit === "Hours" ? "hours remaining" : "days remaining")}</strong></div><div class="balance-numbers"><div class="used-leave-link" data-leave-type="${frappe.utils.escape_html(row.leave_type)}"><span>${__("Used")}</span><strong>${formatNumber(row.used)}</strong></div><div><span>${__("Allocated")}</span><strong>${formatNumber(row.allocated)}</strong></div></div></div>`).join("") : `<div class="history-loading">${__("No active leave allocations found.")}</div>`;
+				requests.innerHTML = data.requests.length ? data.requests.map((row) => `<div class="leave-row" data-leave="${frappe.utils.escape_html(row.name)}"><div class="row-between"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><span class="status-pill">${frappe.utils.escape_html(__(row.status))}</span></div><span class="row-subtle">${portalDate(row.from_date)} – ${portalDate(row.to_date)} · ${formatNumber(row.custom_leave_unit === "Hours" ? row.custom_leave_hours : row.total_leave_days)} ${__(row.custom_leave_unit === "Hours" ? "hours" : "days")}</span></div>`).join("") : `<div class="history-loading">${__("No leave requests found.")}</div>`;
+				requests.querySelectorAll("[data-leave]").forEach((row) => row.onclick = () => openLeaveDetail(row.dataset.leave));
+				balances.querySelectorAll(".used-leave-link").forEach((used) => used.onclick = () => {
+					const matching = data.requests.filter((row) => row.leave_type === used.dataset.leaveType && row.status === "Approved");
+					if (matching.length === 1) openLeaveDetail(matching[0].name);
+					else {
+						requests.innerHTML = matching.length ? matching.map((row) => `<div class="leave-row" data-leave="${frappe.utils.escape_html(row.name)}"><div class="row-between"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><span class="status-pill">${frappe.utils.escape_html(__(row.status))}</span></div><span class="row-subtle"><bdi>${portalDate(row.from_date)} – ${portalDate(row.to_date)}</bdi></span></div>`).join("") : `<div class="history-loading">${__("No approved leave usage found.")}</div>`;
+						requests.querySelectorAll("[data-leave]").forEach((row) => row.onclick = () => openLeaveDetail(row.dataset.leave));
+						byId("leave-requests").closest("details").open = true;
+					}
+				});
+				loadedSections.add("leaves");
+			} catch (error) {
+				loadedSections.delete("leaves");
+				const message = frappe.utils.escape_html(error?.message || __("Request failed."));
+				balances.innerHTML = `<button type="button" class="history-loading leave-retry">${message}</button>`;
+				requests.innerHTML = `<button type="button" class="history-loading leave-retry">${message}</button>`;
+				document.querySelectorAll(".leave-retry").forEach((button) => button.onclick = () => loadLeaves(true));
+			} finally {
+				leavesLoadPromise = null;
+			}
+		})();
+		return leavesLoadPromise;
 	}
 
 	let currentLeaveDetail = null;
@@ -497,7 +517,10 @@ frappe.ready(() => {
 	const tabOrder = ["attendance", "leaves", "approvals", "salary", "profile"];
 	let activeSection = "attendance";
 	function showSection(name, direction = null) {
-		if (name === activeSection) return;
+		if (name === activeSection) {
+			if (name === "leaves") loadLeaves(!loadedSections.has("leaves"));
+			return;
+		}
 		const previousIndex = tabOrder.indexOf(activeSection), nextIndex = tabOrder.indexOf(name);
 		const animation = direction || (nextIndex > previousIndex ? "next" : "prev");
 		document.querySelectorAll(".portal-view").forEach((view) => view.classList.toggle("is-hidden", view.id !== `${name}-view`));
@@ -506,8 +529,8 @@ frappe.ready(() => {
 		requestAnimationFrame(() => view?.classList.add(`tab-enter-${animation}`));
 		document.querySelectorAll(".bottom-tabs [data-tab]").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === name));
 		if (byId("location-info-button")) byId("location-info-button").hidden = name !== "attendance";
-		if (name === "leaves") loadLeaves(); else if (name === "approvals") loadApprovals(); else if (name === "salary") loadSalary(); else if (name === "profile") loadProfile();
 		activeSection = name;
+		if (name === "leaves") loadLeaves(); else if (name === "approvals") loadApprovals(); else if (name === "salary") loadSalary(); else if (name === "profile") loadProfile();
 		window.scrollTo({top: 0, behavior: "smooth"});
 	}
 

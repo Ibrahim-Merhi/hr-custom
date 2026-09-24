@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import add_days, add_months, cint, flt, get_datetime, getdate, now_datetime, nowdate
+from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
 
 from hr_custom.attendance.compat import supported_values
 from hr_custom.attendance.geofence import get_distance_in_meters, validate_coordinates
