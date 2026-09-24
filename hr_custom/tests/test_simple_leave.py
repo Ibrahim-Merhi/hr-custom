@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -72,6 +74,15 @@ class TestSimpleLeave(FrappeTestCase):
         self.assertEqual(result["calendar_days"], 3)
         self.assertEqual(result["leave_days"], 1)
         self.assertEqual(str(result["return_to_work_date"]), "2026-09-14")
+
+    def test_half_day_request_uses_standard_leave_fields(self):
+        with patch("hr_custom.api.mobile_attendance._employee_for_user", return_value=frappe._dict(name=self.employee)):
+            result = submit_simple_leave("2028-02-08", "2028-02-08", "Half-day appointment", leave_type=self.leave_type, half_day=1)
+        application = frappe.get_doc("Leave Application", result["name"])
+        self.assertEqual(result["leave_days"], 0.5)
+        self.assertEqual(application.half_day, 1)
+        self.assertEqual(str(application.half_day_date), "2028-02-08")
+        self.assertEqual(application.total_leave_days, 0.5)
 
     def test_partial_hour_request_uses_hour_allocation(self):
         result = submit_simple_leave("2028-02-08", "2028-02-08", "Appointment", "Hours", "Partial Hours", 2)

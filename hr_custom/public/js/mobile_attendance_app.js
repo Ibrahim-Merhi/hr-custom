@@ -749,7 +749,7 @@ frappe.ready(() => {
 		if (!fromDate || !toDate || toDate < fromDate) return;
 		try {
 			if (!byId("leave-type").value) return;
-			const result = await api("hr_custom.services.simple_leave.preview_simple_leave", {from_date: fromDate, to_date: toDate, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value});
+			const result = await api("hr_custom.services.simple_leave.preview_simple_leave", {from_date: fromDate, to_date: toDate, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value, half_day: byId("leave-half-day").checked ? 1 : 0});
 			byId("leave-preview").classList.remove("is-hidden");
 			setText("leave-preview-amount", result.leave_unit === "Hours" ? __("{0} hours", [result.total_leave_hours]) : __("{0} days", [result.leave_days]));
 			setText("leave-preview-return", portalDate(result.return_to_work_date, {day: "numeric", month: "long", year: "numeric"}));
@@ -763,6 +763,8 @@ frappe.ready(() => {
 	function scheduleLeavePreview() { clearTimeout(leavePreviewTimer); leavePreviewTimer = setTimeout(previewLeave, 250); }
 	function updateHourlyFields() {
 		const hourly = byId("leave-unit").value === "Hours";
+		byId("half-day-field").classList.toggle("is-hidden", hourly);
+		if (hourly) byId("leave-half-day").checked = false;
 		byId("hourly-leave-fields").classList.toggle("is-hidden", !hourly);
 		byId("partial-hours-field").classList.toggle("is-hidden", !hourly || byId("leave-duration").value !== "Partial Hours");
 		if (hourly && byId("leave-duration").value === "Partial Hours") byId("leave-to-date").value = byId("leave-from-date").value;
@@ -780,7 +782,7 @@ frappe.ready(() => {
 		message.textContent = __("Selecting your leave allocation and approver…");
 		try {
 			const result = await Promise.race([
-				api("hr_custom.services.simple_leave.submit_simple_leave", {from_date: byId("leave-from-date").value, to_date: byId("leave-to-date").value, reason: byId("leave-reason").value, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value}),
+				api("hr_custom.services.simple_leave.submit_simple_leave", {from_date: byId("leave-from-date").value, to_date: byId("leave-to-date").value, reason: byId("leave-reason").value, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value, half_day: byId("leave-half-day").checked ? 1 : 0}),
 				new Promise((_, reject) => setTimeout(() => reject(new Error(__("The leave request timed out. Please try again."))), 20000)),
 			]);
 			if (submissionSequence !== leaveSubmissionSequence) return;
@@ -950,6 +952,7 @@ frappe.ready(() => {
 	byId("leave-from-date").addEventListener("change", loadAvailableLeaveTypes);
 	byId("leave-type").addEventListener("change", updateSelectedLeaveType);
 	byId("leave-duration").addEventListener("change", updateHourlyFields);
+	byId("leave-half-day").addEventListener("change", scheduleLeavePreview);
 	byId("leave-partial-hours").addEventListener("input", scheduleLeavePreview);
 	byId("simple-leave-form").addEventListener("submit", submitSimpleLeave);
 	["attendance-from", "attendance-to", "leave-from-date", "leave-to-date"].forEach((id) => autoCommitDatePicker(byId(id)));

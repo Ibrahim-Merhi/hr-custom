@@ -258,7 +258,7 @@ def select_leave_type(employee, from_date, to_date, leave_unit=None, requested_l
     return max(balances)[1]
 
 
-def calculate_leave_calendar(employee, leave_type, from_date, to_date, leave_duration=None, partial_hours=None):
+def calculate_leave_calendar(employee, leave_type, from_date, to_date, leave_duration=None, partial_hours=None, half_day=0):
     from hr_custom.services.hourly_leave import calculate_hourly_leave
 
     start, end = getdate(from_date), getdate(to_date)
@@ -292,6 +292,12 @@ def calculate_leave_calendar(employee, leave_type, from_date, to_date, leave_dur
         result["leave_days"] = len(details) if include_holiday else result["working_leave_days"]
         if result["leave_days"] <= 0:
             frappe.throw(_("The selected period contains no scheduled working days eligible for leave."))
+        if cint(half_day):
+            if not details[0]["is_leave_day"]:
+                frappe.throw(_("Half Day leave must start on a scheduled working day."))
+            result["leave_days"] = flt(result["leave_days"] - 0.5, 2)
+            result["half_day"] = 1
+            result["half_day_date"] = start
     return result
 
 
@@ -316,17 +322,17 @@ def get_available_leave_types(from_date=None, to_date=None):
 
 
 @frappe.whitelist()
-def preview_simple_leave(from_date, to_date, leave_unit="Days", leave_duration=None, partial_hours=None, leave_type=None):
+def preview_simple_leave(from_date, to_date, leave_unit="Days", leave_duration=None, partial_hours=None, leave_type=None, half_day=0):
     from hr_custom.api.mobile_attendance import _employee_for_user
 
     employee = _employee_for_user()
     unit = get_leave_unit(leave_type) if leave_type else (leave_unit if leave_unit in ("Days", "Hours") else None)
     leave_type = select_leave_type(employee.name, getdate(from_date), getdate(to_date), unit, leave_type)
-    return calculate_leave_calendar(employee.name, leave_type, from_date, to_date, leave_duration, partial_hours)
+    return calculate_leave_calendar(employee.name, leave_type, from_date, to_date, leave_duration, partial_hours, half_day)
 
 
 @frappe.whitelist(methods=["POST"])
-def submit_simple_leave(from_date, to_date, reason, leave_unit="Days", leave_duration=None, partial_hours=None, leave_type=None):
+def submit_simple_leave(from_date, to_date, reason, leave_unit="Days", leave_duration=None, partial_hours=None, leave_type=None, half_day=0):
     from hr_custom.api.mobile_attendance import _employee_for_user
     employee = _employee_for_user()
     from_date, to_date = getdate(from_date), getdate(to_date)
@@ -341,9 +347,10 @@ def submit_simple_leave(from_date, to_date, reason, leave_unit="Days", leave_dur
     unit = get_leave_unit(leave_type) if leave_type else (leave_unit if leave_unit in ("Days", "Hours") else None)
     leave_type = select_leave_type(employee.name, from_date, to_date, unit, leave_type)
     unit = get_leave_unit(leave_type)
-    preview = calculate_leave_calendar(employee.name, leave_type, from_date, to_date, leave_duration, partial_hours)
-    application = frappe.get_doc({"doctype": "Leave Application", "employee": employee.name, "leave_type": leave_type, "from_date": from_date, "to_date": to_date, "posting_date": nowdate(), "description": reason, "leave_approver": approvers[0], "status": "Open", "custom_leave_duration": leave_duration, "custom_partial_hours": partial_hours})
+    preview = calculate_leave_calendar(employee.name, leave_type, from_date, to_date, leave_duration, partial_hours, half_day)
+    is_half_day = cint(half_day) if unit == "Days" else 0
+    application = frappe.get_doc({"doctype": "Leave Application", "employee": employee.name, "leave_type": leave_type, "from_date": from_date, "to_date": to_date, "half_day": is_half_day, "half_day_date": from_date if is_half_day else None, "posting_date": nowdate(), "description": reason, "leave_approver": approvers[0], "status": "Open", "custom_leave_duration": leave_duration, "custom_partial_hours": partial_hours})
     # This endpoint already binds the application to the authenticated employee.
     # Controlled insertion avoids ESS Company link permissions blocking a valid request.
     application.insert(ignore_permissions=True, ignore_links=True)
-    return {"name": application.name, "leave_type": leave_type, "leave_unit": unit, "leave_days": preview.get("leave_days"), "leave_hours": preview.get("total_leave_hours"), "return_to_work_date": preview["return_to_work_date"], "approver": approvers[0], "approver_count": len(approvers), "status": application.status}
+    return {"name": application.name, "leave_type": leave_type, "leave_unit": unit, "leave_days": preview.get("leave_days"), "leave_hours": preview.get("total_leave_hours"), "half_day": is_half_day, "return_to_work_date": preview["return_to_work_date"], "approver": approvers[0], "approver_count": len(approvers), "status": application.status}
