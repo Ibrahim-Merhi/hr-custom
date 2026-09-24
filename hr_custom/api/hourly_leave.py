@@ -4,7 +4,7 @@ from frappe import _
 from hr_custom.services.hourly_leave import calculate_hourly_leave, get_hour_leave_balance
 from hr_custom.services.work_schedule import get_leave_unit
 
-HR_ROLES = {"HR User", "HR Manager", "System Manager"}
+HR_ROLES = {"HR Coordinator", "HR User", "HR Manager", "System Manager"}
 
 
 def _check_employee_access(employee: str):

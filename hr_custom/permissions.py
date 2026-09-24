@@ -1,6 +1,6 @@
 import frappe
 
-HR_ROLES = {"HR User", "HR Manager", "System Manager"}
+HR_ROLES = {"HR Coordinator", "HR User", "HR Manager", "System Manager"}
 
 
 def _is_hr(user):

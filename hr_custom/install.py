@@ -30,7 +30,8 @@ def after_migrate():
     from hr_custom.patches.v1_0.create_custom_fields import execute
     from hr_custom.setup.workspace import ensure_hr_workspace_section
     from hr_custom.api.portal_auth import upgrade_legacy_portal_passwords
-    execute(); ensure_hr_workspace_section(); upgrade_legacy_portal_passwords(); migrate_leave_approvers_to_employees(); remove_legacy_portal_users()
+    from hr_custom.setup.hr_coordinator import ensure_hr_coordinator_permissions
+    execute(); ensure_hr_workspace_section(); ensure_hr_coordinator_permissions(); upgrade_legacy_portal_passwords(); migrate_leave_approvers_to_employees(); remove_legacy_portal_users()
 
 
 def migrate_leave_approvers_to_employees():
