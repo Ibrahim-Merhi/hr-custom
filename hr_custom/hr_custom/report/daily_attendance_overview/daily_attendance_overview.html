@@ -1,39 +1,44 @@
 <style>
-	.attendance-print { direction: rtl; font-family: "Noto Naskh Arabic", Tahoma, Arial, sans-serif; }
-	.attendance-print-meta { margin: 8px 0 14px; text-align: center; color: #555; }
-	.attendance-print-table { width: 100%; border-collapse: collapse; font-size: 11px; direction: rtl; }
-	.attendance-print-table th, .attendance-print-table td { border: 1px solid #999; padding: 5px 6px; vertical-align: top; text-align: right; }
-	.attendance-print-table th { background: #e9ecef; font-weight: 700; }
-	.attendance-print-table .present { color: #16834a; font-weight: 700; }
-	.attendance-print-table .absent { color: #c73545; font-weight: 700; }
+	.attendance-print{direction:rtl;font-family:"Noto Naskh Arabic",Tahoma,Arial,sans-serif;color:#17233b;padding:8px}
+	.attendance-print-header{border-bottom:3px solid #102b58;padding:4px 0 14px;margin-bottom:14px;text-align:center}
+	.attendance-print-header h2{margin:0 0 7px;font-size:25px;font-weight:800;color:#102b58}
+	.attendance-print-meta{color:#65758b;font-size:12px}.attendance-print-meta span{display:inline-block;margin:0 5px}
+	.attendance-summary{display:flex;gap:10px;margin:0 0 14px}.attendance-summary-card{flex:1;border:1px solid #d8e0eb;border-radius:8px;padding:9px 12px;background:#f8fafc}.attendance-summary-card span{display:block;color:#718096;font-size:10px}.attendance-summary-card strong{display:block;margin-top:3px;font-size:18px;color:#102b58}.attendance-summary-card.present strong{color:#16834a}.attendance-summary-card.absent strong{color:#c73545}
+	.attendance-print-table{width:100%;border-collapse:separate;border-spacing:0;font-size:10px;direction:rtl;border:1px solid #cdd6e2;border-radius:7px;overflow:hidden}
+	.attendance-print-table th,.attendance-print-table td{border-left:1px solid #d7dee8;border-bottom:1px solid #d7dee8;padding:7px 7px;vertical-align:middle;text-align:right}.attendance-print-table th:last-child,.attendance-print-table td:last-child{border-left:0}.attendance-print-table tbody tr:last-child td{border-bottom:0}
+	.attendance-print-table th{background:#102b58;color:#fff;font-weight:700;white-space:nowrap}.attendance-print-table tbody tr:nth-child(even){background:#f6f8fb}
+	.attendance-print-table .present,.attendance-print-table .absent{display:inline-block;border-radius:10px;padding:2px 8px;font-weight:700}.attendance-print-table .present{color:#16834a;background:#e4f6eb}.attendance-print-table .absent{color:#c73545;background:#ffebed}.attendance-print-table .duration{direction:ltr;text-align:center;font-family:monospace;font-weight:700}
+	.attendance-print-footer{margin-top:10px;color:#8491a3;font-size:9px;text-align:left}
 </style>
-
+{% var rows = original_data || data; var presentCount = 0; var absentCount = 0; var totalMinutes = 0; %}
+{% for (var s = 0; s < rows.length; s++) { var summaryStatus = String(rows[s].status || "").toLowerCase(); if (summaryStatus === "present" || summaryStatus === "حاضر") presentCount++; if (summaryStatus === "absent" || summaryStatus === "غائب") absentCount++; var durationParts = String(rows[s].working_hours || "0:00").split(":"); totalMinutes += (parseInt(durationParts[0]) || 0) * 60 + (parseInt(durationParts[1]) || 0); } %}
+{% var totalDuration = Math.floor(totalMinutes / 60) + ":" + String(totalMinutes % 60).padStart(2, "0"); %}
 <div class="attendance-print" dir="rtl">
-<h2 class="text-center">تقرير الحضور اليومي</h2>
-<div class="attendance-print-meta">
-	<strong>{%= ({Day:"يوم", Week:"أسبوع", Month:"شهر"})[filters.period_type] || filters.period_type %}</strong>
-	&middot; {%= frappe.datetime.str_to_user(filters.date) %}
-	&middot; {%= ({All:"الكل", Present:"حاضر", Absent:"غائب"})[filters.attendance_status] || filters.attendance_status %}
-	{% if (filters.company) { %}&middot; الشركة: {%= filters.company %}{% } %}
-	{% if (filters.branch) { %}&middot; الفرع: {%= filters.branch %}{% } %}
-	{% if (filters.department) { %}&middot; القسم: {%= filters.department %}{% } %}
-</div>
-<table class="attendance-print-table">
-	<thead><tr>
-		<th>اسم الموظف</th><th>التاريخ</th><th>اليوم</th><th>الحالة</th>
-		<th>أول تسجيل دخول</th><th>آخر تسجيل خروج</th><th>ساعات العمل</th><th>القسم</th><th>الفرع</th>
-	</tr></thead>
-	<tbody>
-	{% var arabicDays = {Sunday:"الأحد", Monday:"الاثنين", Tuesday:"الثلاثاء", Wednesday:"الأربعاء", Thursday:"الخميس", Friday:"الجمعة", Saturday:"السبت"}; %}
-	{% for (var i = 0; i < data.length; i++) { var row = data[i]; var rawStatus = String(row.status || ""); %}
-		<tr>
-			<td>{%= row.employee_name_ar || row.employee_name || "" %}</td><td>{%= row.date || "" %}</td><td>{%= arabicDays[row.day] || row.day || "" %}</td>
-			<td class="{%= rawStatus.toLowerCase() %}">{%= rawStatus === "Present" ? "حاضر" : rawStatus === "Absent" ? "غائب" : rawStatus %}</td>
-			<td>{%= row.first_in || "" %}</td><td>{%= row.last_out || "" %}</td><td>{%= row.working_hours || 0 %}</td>
-			<td>{%= row.department || "" %}</td><td>{%= row.branch || "" %}</td>
-		</tr>
-	{% } %}
-	</tbody>
-</table>
-<p class="text-left text-muted">تاريخ الطباعة: {%= frappe.datetime.str_to_user(frappe.datetime.get_datetime_as_string()) %}</p>
+	<div class="attendance-print-header">
+		<h2>تقرير الحضور اليومي</h2>
+		<div class="attendance-print-meta">
+			<span><strong>{%= ({Day:"يوم", Week:"أسبوع", Month:"شهر"})[filters.period_type] || filters.period_type %}</strong></span>
+			<span>{%= frappe.datetime.str_to_user(filters.date) %}</span>
+			<span>{%= ({All:"الكل", Present:"حاضر", Absent:"غائب"})[filters.attendance_status] || filters.attendance_status %}</span>
+			{% if (filters.company) { %}<span>الشركة: {%= filters.company %}</span>{% } %}
+			{% if (filters.branch) { %}<span>الفرع: {%= filters.branch %}</span>{% } %}
+			{% if (filters.department) { %}<span>القسم: {%= filters.department %}</span>{% } %}
+		</div>
+	</div>
+	<div class="attendance-summary">
+		<div class="attendance-summary-card"><span>إجمالي السجلات</span><strong>{%= rows.length %}</strong></div>
+		<div class="attendance-summary-card present"><span>حاضر</span><strong>{%= presentCount %}</strong></div>
+		<div class="attendance-summary-card absent"><span>غائب</span><strong>{%= absentCount %}</strong></div>
+		<div class="attendance-summary-card"><span>إجمالي ساعات العمل</span><strong>{%= totalDuration %}</strong></div>
+	</div>
+	<table class="attendance-print-table">
+		<thead><tr><th>اسم الموظف</th><th>التاريخ</th><th>اليوم</th><th>الحالة</th><th>أول تسجيل دخول</th><th>آخر تسجيل خروج</th><th>ساعات العمل</th><th>القسم</th><th>الفرع</th></tr></thead>
+		<tbody>
+		{% var arabicDays={Sunday:"الأحد",Monday:"الاثنين",Tuesday:"الثلاثاء",Wednesday:"الأربعاء",Thursday:"الخميس",Friday:"الجمعة",Saturday:"السبت"}; %}
+		{% for(var i=0;i<rows.length;i++){var row=rows[i];var rawStatus=String(row.status||"");var normalizedStatus=rawStatus.toLowerCase();var statusClass=(normalizedStatus==="present"||rawStatus==="حاضر")?"present":(normalizedStatus==="absent"||rawStatus==="غائب")?"absent":"";%}
+		<tr><td><strong>{%= row.employee_name_ar||row.employee_name||"" %}</strong></td><td>{%= row.date||"" %}</td><td>{%= arabicDays[row.day]||row.day||"" %}</td><td><span class="{%= statusClass %}">{%= statusClass==="present"?"حاضر":statusClass==="absent"?"غائب":rawStatus %}</span></td><td>{%= row.first_in||"—" %}</td><td>{%= row.last_out||"—" %}</td><td class="duration">{%= row.working_hours||"0:00" %}</td><td>{%= row.department||"—" %}</td><td>{%= row.branch_name_ar||row.branch||"—" %}</td></tr>
+		{% } %}
+		</tbody>
+	</table>
+	<div class="attendance-print-footer">تاريخ الطباعة: {%= frappe.datetime.str_to_user(frappe.datetime.get_datetime_as_string()) %}</div>
 </div>

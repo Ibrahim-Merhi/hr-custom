@@ -16,6 +16,9 @@ def execute(filters=None):
 	if not employees:
 		return columns, []
 
+	branch_names = {row.branch for row in employees if row.branch}
+	branch_names_ar = {row.name: row.custom_branch_name_arabic for row in frappe.get_all("Branch", filters={"name": ["in", list(branch_names)]}, fields=["name", "custom_branch_name_arabic"], limit_page_length=0)} if branch_names else {}
+
 	logs = frappe.get_all(
 		"Employee Checkin",
 		filters=[["employee", "in", [row.name for row in employees]], ["time", ">=", start], ["time", "<", end + timedelta(days=1)]],
@@ -43,18 +46,22 @@ def execute(filters=None):
 			outs = [row.time for row in day_logs if row.log_type == "OUT"]
 			first_in, last_out = (min(ins) if ins else None), (max(outs) if outs else None)
 			worked = (last_out - first_in).total_seconds() / 3600 if first_in and last_out and last_out > first_in else 0
+			worked_minutes = max(0, round(worked * 60))
+			worked_display = f"{worked_minutes / 60:.0f}:{worked_minutes % 60:02d}" if worked_minutes else "0:00"
 			rows.append({
 				"employee": employee.name,
 				"employee_name": employee.employee_name,
 				"employee_name_ar": employee.custom_employee_name_ar,
 				"department": employee.department,
 				"branch": employee.branch,
+				"branch_name_ar": branch_names_ar.get(employee.branch) or employee.branch,
 				"date": date,
 				"day": _(date.strftime("%A")),
 				"status": _(status),
 				"first_in": first_in.strftime("%H:%M:%S") if first_in else None,
 				"last_out": last_out.strftime("%H:%M:%S") if last_out else None,
-				"working_hours": worked,
+				"working_hours": worked_display,
+				"working_hours_decimal": round(worked, 2),
 			})
 			date += timedelta(days=1)
 	return columns, rows
@@ -92,7 +99,7 @@ def _columns():
 		{"label": _("Status"), "fieldname": "status", "width": 90},
 		{"label": _("First Clock In"), "fieldname": "first_in", "fieldtype": "Time", "width": 110},
 		{"label": _("Last Clock Out"), "fieldname": "last_out", "fieldtype": "Time", "width": 110},
-		{"label": _("Working Hours"), "fieldname": "working_hours", "fieldtype": "Float", "precision": 2, "width": 110},
+		{"label": _("Working Hours (H:MM)"), "fieldname": "working_hours", "fieldtype": "Data", "width": 130},
 		{"label": _("Department"), "fieldname": "department", "fieldtype": "Link", "options": "Department", "width": 140},
 		{"label": _("Branch"), "fieldname": "branch", "fieldtype": "Link", "options": "Branch", "width": 130},
 	]
