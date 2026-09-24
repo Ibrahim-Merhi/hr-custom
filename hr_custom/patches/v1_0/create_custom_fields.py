@@ -47,7 +47,7 @@ FIELDS = {
     "Leave Application": [
         dict(fieldname="custom_approval_workflow_section", label="Employee Approval Workflow", fieldtype="Section Break", insert_after="description", collapsible=1),
         dict(fieldname="custom_approval_stage", label="Approval Stage", fieldtype="Select", options="\nPending Approver Approval\nPending HR Approval\nApproved\nRejected", read_only=1, allow_on_submit=1, in_list_view=1, insert_after="custom_approval_workflow_section"),
-        dict(fieldname="custom_current_approver", label="Current Approver", fieldtype="Link", options="User", read_only=1, allow_on_submit=1, insert_after="custom_approval_stage"),
+        dict(fieldname="custom_current_approver", label="Current Approver Employee", fieldtype="Link", options="Employee", read_only=1, allow_on_submit=1, insert_after="custom_approval_stage"),
         dict(fieldname="custom_approval_steps", label="Approval Steps", fieldtype="Table", options="Leave Application Approval Step", read_only=1, allow_on_submit=1, insert_after="custom_current_approver"),
         dict(fieldname="custom_hourly_leave_section", label="Hourly Leave", fieldtype="Section Break", insert_after="total_leave_days", depends_on="eval:doc.custom_leave_unit == 'Hours'"),
         dict(fieldname="custom_leave_unit", label="Leave Unit", fieldtype="Data", read_only=1, insert_after="custom_hourly_leave_section"),

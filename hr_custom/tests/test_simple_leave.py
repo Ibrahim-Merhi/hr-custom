@@ -35,7 +35,7 @@ class TestSimpleLeave(FrappeTestCase):
         for index, day in enumerate(("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"), 1):
             employee.append("custom_weekly_working_hours", {"day_of_week": day, "working_hours": 8 if day not in ("Friday", "Saturday") else 0, "sequence": index, "enabled": 1})
         employee.set("custom_leave_approvers", [])
-        employee.append("custom_leave_approvers", {"approver": "Administrator", "sequence": 1, "enabled": 1})
+        employee.append("custom_leave_approvers", {"approver": self.employee, "sequence": 1, "enabled": 1})
         employee.save()
         frappe.set_user(self.user)
 
@@ -47,20 +47,21 @@ class TestSimpleLeave(FrappeTestCase):
         result = submit_simple_leave("2028-02-06", "2028-02-07", "Family appointment")
         application = frappe.get_doc("Leave Application", result["name"])
         self.assertEqual(application.leave_type, self.leave_type)
-        self.assertEqual(application.leave_approver, "Administrator")
+        self.assertEqual(application.leave_approver, self.user)
         self.assertEqual(application.description, "Family appointment")
         self.assertEqual(result["approver_count"], 1)
         self.assertEqual(result["leave_days"], 2)
         self.assertEqual(application.custom_approval_stage, "Pending Approver Approval")
-        self.assertEqual(application.custom_current_approver, "Administrator")
+        self.assertEqual(application.custom_current_approver, self.employee)
         self.assertEqual(application.custom_approval_steps[0].status, "Pending")
 
     def test_approver_then_hr_manager_finally_submits(self):
         result = submit_simple_leave("2028-03-06", "2028-03-07", "Sequential approval")
-        frappe.set_user("Administrator")
+        frappe.set_user(self.user)
         first = process_leave_approval(result["name"], "approve", "Approver accepted")
         self.assertEqual(first["stage"], "Pending HR Approval")
         self.assertEqual(first["docstatus"], 0)
+        frappe.set_user("Administrator")
         final = process_leave_approval(result["name"], "approve", "HR accepted")
         self.assertEqual(final["stage"], "Approved")
         self.assertEqual(final["status"], "Approved")
@@ -87,8 +88,8 @@ class TestSimpleLeave(FrappeTestCase):
         self.assertEqual(result["leave_type"], self.hour_leave_type)
 
     def test_employee_primary_approver_is_synchronized(self):
-        self.assertEqual(get_employee_approvers(self.employee), ["Administrator"])
-        self.assertEqual(frappe.db.get_value("Employee", self.employee, "leave_approver"), "Administrator")
+        self.assertEqual(get_employee_approvers(self.employee), [self.employee])
+        self.assertEqual(frappe.db.get_value("Employee", self.employee, "leave_approver"), self.user)
 
     def test_reason_and_date_validation(self):
         with self.assertRaises(frappe.ValidationError):

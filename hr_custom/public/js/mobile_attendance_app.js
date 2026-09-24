@@ -183,7 +183,7 @@ frappe.ready(() => {
 		const greeting = hour < 12 ? __("Good morning") : hour < 18 ? __("Good afternoon") : __("Good evening");
 		setText("greeting", greeting + "، " + localizedFirstName(value));
 		setText("employee", localizedEmployeeName(value));
-		setText("branch", value.branch || __("Not assigned"));
+		setText("branch", (isArabic ? value.branch_name_arabic : value.branch) || value.branch || __("Not assigned"));
 		setText("state", __(value.current_state));
 		byId("state-dot")?.classList.toggle("in", value.current_state === "CHECKED IN");
 		setText("action-label", value.next_action === "IN" ? __("CLOCK IN") : __("CLOCK OUT"));
@@ -351,8 +351,8 @@ frappe.ready(() => {
 		const balances = byId("leave-balances"), requests = byId("leave-requests");
 		try {
 			const data = await api("hr_custom.api.mobile_attendance.get_leave_portal_data");
-			balances.innerHTML = data.balances.length ? data.balances.map((row) => `<div class="balance-row"><div class="balance-title"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><strong>${formatNumber(row.remaining)} ${__("remaining")}</strong></div><div class="balance-numbers"><div class="used-leave-link" data-leave-type="${frappe.utils.escape_html(row.leave_type)}"><span>${__("Used")}</span><strong>${formatNumber(row.used)}</strong></div><div><span>${__("Allocated")}</span><strong>${formatNumber(row.allocated)}</strong></div></div></div>`).join("") : `<div class="history-loading">${__("No active leave allocations found.")}</div>`;
-			requests.innerHTML = data.requests.length ? data.requests.map((row) => `<div class="leave-row" data-leave="${frappe.utils.escape_html(row.name)}"><div class="row-between"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><span class="status-pill">${frappe.utils.escape_html(__(row.status))}</span></div><span class="row-subtle">${portalDate(row.from_date)} – ${portalDate(row.to_date)} · ${formatNumber(row.total_leave_days)} ${__("days")}</span></div>`).join("") : `<div class="history-loading">${__("No leave requests found.")}</div>`;
+			balances.innerHTML = data.balances.length ? data.balances.map((row) => `<div class="balance-row"><div class="balance-title"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><strong>${formatNumber(row.remaining)} ${__(row.unit === "Hours" ? "hours remaining" : "days remaining")}</strong></div><div class="balance-numbers"><div class="used-leave-link" data-leave-type="${frappe.utils.escape_html(row.leave_type)}"><span>${__("Used")}</span><strong>${formatNumber(row.used)}</strong></div><div><span>${__("Allocated")}</span><strong>${formatNumber(row.allocated)}</strong></div></div></div>`).join("") : `<div class="history-loading">${__("No active leave allocations found.")}</div>`;
+			requests.innerHTML = data.requests.length ? data.requests.map((row) => `<div class="leave-row" data-leave="${frappe.utils.escape_html(row.name)}"><div class="row-between"><strong>${frappe.utils.escape_html(__(row.leave_type))}</strong><span class="status-pill">${frappe.utils.escape_html(__(row.status))}</span></div><span class="row-subtle">${portalDate(row.from_date)} – ${portalDate(row.to_date)} · ${formatNumber(row.custom_leave_unit === "Hours" ? row.custom_leave_hours : row.total_leave_days)} ${__(row.custom_leave_unit === "Hours" ? "hours" : "days")}</span></div>`).join("") : `<div class="history-loading">${__("No leave requests found.")}</div>`;
 			requests.querySelectorAll("[data-leave]").forEach((row) => row.onclick = () => openLeaveDetail(row.dataset.leave));
 			balances.querySelectorAll(".used-leave-link").forEach((used) => used.onclick = () => {
 				const matching = data.requests.filter((row) => row.leave_type === used.dataset.leaveType && row.status === "Approved");
@@ -382,7 +382,7 @@ frappe.ready(() => {
 			]);
 			setText("leave-detail-title", __(row.leave_type || "Leave Request"));
 			const field = (label, value) => `<div class="leave-detail-field"><span>${label}</span><strong>${frappe.utils.escape_html(String(value || "—"))}</strong></div>`;
-			container.innerHTML = field(__("Employee"), row.employee_name || row.employee) + field(__("Dates"), `${portalDate(row.from_date)} – ${portalDate(row.to_date)}`) + field(__("Amount"), `${formatNumber(row.total_leave_days)} ${__("days")}`) + field(__("Status"), __(row.stage || row.status)) + field(__("Reason"), row.description) + `<div class="leave-detail-field"><span>${__("Approval Progress")}</span>${(row.steps || []).map((step) => `<div class="approval-step"><strong>${frappe.utils.escape_html(step.approver_name || step.approver)}</strong><b>${frappe.utils.escape_html(__(step.status))}</b></div>`).join("") || `<strong>${__("No approval steps")}</strong>`}</div>`;
+			container.innerHTML = field(__("Employee"), row.employee_name || row.employee) + field(__("Dates"), `${portalDate(row.from_date)} – ${portalDate(row.to_date)}`) + field(__("Amount"), `${formatNumber(row.custom_leave_unit === "Hours" ? row.custom_leave_hours : row.total_leave_days)} ${__(row.custom_leave_unit === "Hours" ? "hours" : "days")}`) + field(__("Status"), __(row.stage || row.status)) + field(__("Reason"), row.description) + `<div class="leave-detail-field"><span>${__("Approval Progress")}</span>${(row.steps || []).map((step) => `<div class="approval-step"><strong>${frappe.utils.escape_html(step.approver_name || step.approver)}</strong><b>${frappe.utils.escape_html(__(step.status))}</b></div>`).join("") || `<strong>${__("No approval steps")}</strong>`}</div>`;
 			byId("leave-detail-actions").classList.toggle("is-hidden", !(allowAction && context.can_act));
 			setText("approve-leave", context.is_final_hr_step ? __("Final Approve & Submit") : __("Approve"));
 		} catch (error) { container.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
@@ -446,7 +446,7 @@ frappe.ready(() => {
 			const tab = document.querySelector('[data-tab="approvals"]');
 			tab.hidden = !(data.can_review || corrections.can_review); updateTabColumns();
 			setTabBadge("approvals", data.items.length + corrections.items.length);
-			const leaveHtml = data.items.map((row) => `<div class="approval-row" data-leave="${frappe.utils.escape_html(row.name)}"><div class="row-between"><strong>${frappe.utils.escape_html(row.employee_name || row.employee)}</strong><span class="status-pill">${row.review_mode === "hr" ? __("Final HR") : __("Your approval")}</span></div><strong>${frappe.utils.escape_html(row.leave_type)}</strong><span class="row-subtle">${moment(row.from_date).format("D MMM YYYY")} – ${moment(row.to_date).format("D MMM YYYY")} · ${formatNumber(row.total_leave_days)} ${__("days")}</span></div>`).join("");
+			const leaveHtml = data.items.map((row) => `<div class="approval-row" data-leave="${frappe.utils.escape_html(row.name)}"><div class="row-between"><strong>${frappe.utils.escape_html(row.employee_name || row.employee)}</strong><span class="status-pill">${row.review_mode === "hr" ? __("Final HR") : __("Your approval")}</span></div><strong>${frappe.utils.escape_html(row.leave_type)}</strong><span class="row-subtle">${moment(row.from_date).format("D MMM YYYY")} – ${moment(row.to_date).format("D MMM YYYY")} · ${formatNumber(row.custom_leave_unit === "Hours" ? row.custom_leave_hours : row.total_leave_days)} ${__(row.custom_leave_unit === "Hours" ? "hours" : "days")}</span></div>`).join("");
 			const correctionHtml = corrections.items.map((row) => `<div class="approval-row" data-correction="${frappe.utils.escape_html(row.name)}"><div class="row-between"><strong>${frappe.utils.escape_html(row.employee_name || row.employee)}</strong><span class="status-pill">${row.review_mode === "hr_override" ? __("HR Override") : row.review_mode === "hr" ? __("Final HR") : __("Your approval")}</span></div><strong>${frappe.utils.escape_html(row.request_type)}</strong><span class="row-subtle">${moment(row.attendance_date).format("D MMM YYYY")} · ${__("Attendance correction")}</span></div>`).join("");
 			container.innerHTML = leaveHtml + correctionHtml || `<div class="history-loading">${__("No requests are waiting for your approval.")}</div>`;
 			container.querySelectorAll("[data-leave]").forEach((row) => row.onclick = () => openLeaveDetail(row.dataset.leave, true));
@@ -572,7 +572,7 @@ frappe.ready(() => {
 		try {
 			const data = await api("hr_custom.api.mobile_attendance.get_portal_notifications", {limit: 100, include_archived: 1});
 			const badge = byId("notification-badge");
-			badge.textContent = data.unread || 0; badge.hidden = !data.unread;
+			badge.textContent = data.unread || 0; badge.hidden = !data.unread; byId("notification-button")?.classList.toggle("has-unread", Boolean(data.unread));
 			data.items = (data.items || []).map((row) => {
 				if (row.reference_document_type !== "HR Announcement") return row;
 				const raw = String(row.body || row.message || "").replace(/<[^>]*>/g, "").trim();
@@ -646,7 +646,13 @@ frappe.ready(() => {
 		openSheet(byId("notification-sheet"));
 		await loadNotifications();
 	}
-	function closeNotifications() { closeSheet(byId("notification-sheet")); }
+	function closeNotifications() {
+		if (window.hrNotificationRequired && typeof Notification !== "undefined" && Notification.permission === "default") {
+			setText("notification-message", __("Locked-screen notifications are required. Tap Enable notifications to continue."));
+			return;
+		}
+		closeSheet(byId("notification-sheet"));
+	}
 
 	async function openLeaveRequest() {
 		const today = moment().format("YYYY-MM-DD");
@@ -859,7 +865,7 @@ frappe.ready(() => {
 			await showAppDialog({title: __("Location not required"), message: __("Your attendance policy allows check-in without GPS."), icon: "⌖"});
 			return;
 		}
-		if (!coords) await locate(true);
+		if (!coords || coords.accuracy > (status.maximum_gps_accuracy || Infinity)) await locate(true);
 		await showAppDialog({title: byId("location-title").textContent, message: byId("location").textContent, icon: coords ? "✓" : "!"});
 	};
 	byId("history-card").addEventListener("toggle", (event) => { if (event.target.open) loadHistory(); });

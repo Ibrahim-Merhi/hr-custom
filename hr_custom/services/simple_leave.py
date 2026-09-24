@@ -7,7 +7,28 @@ from frappe.utils import add_days, cint, flt, getdate, now_datetime, nowdate
 from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
 
 from hr_custom.services.work_schedule import get_employee_schedule, get_holidays, get_leave_unit
-from hr_custom.services.portal_identity import get_effective_approval_user, has_portal_role
+from hr_custom.services.portal_identity import get_portal_credential, has_portal_role
+
+
+def get_current_approver_employee(user=None):
+    """Return the Employee behind either a portal credential or Desk user."""
+    credential = get_portal_credential(user)
+    if credential:
+        return credential.employee
+    return frappe.db.get_value("Employee", {"user_id": user or frappe.session.user, "status": "Active"}, "name")
+
+
+def _approver_role_allowed(user=None):
+    credential = get_portal_credential(user)
+    return not credential or has_portal_role("Leave Approver", user)
+
+
+def _approver_delivery_user(employee):
+    user = frappe.db.get_value("Employee", employee, "user_id")
+    if user:
+        return user
+    credential = frappe.db.get_value("Employee Portal Credential", {"employee": employee, "enabled": 1}, "name")
+    return f"portal::{credential}" if credential else None
 
 
 def validate_employee_leave_setup(doc, method=None):
@@ -24,7 +45,7 @@ def validate_employee_leave_setup(doc, method=None):
             enabled.append(row)
     enabled.sort(key=lambda row: (row.sequence, row.idx or 0))
     if enabled:
-        doc.leave_approver = enabled[0].approver
+        doc.leave_approver = frappe.db.get_value("Employee", enabled[0].approver, "user_id")
 
 
 def get_employee_approvers(employee):
@@ -32,7 +53,8 @@ def get_employee_approvers(employee):
     if rows:
         return [row.approver for row in rows]
     standard = frappe.db.get_value("Employee", employee, "leave_approver")
-    return [standard] if standard else []
+    standard_employee = frappe.db.get_value("Employee", {"user_id": standard}, "name") if standard else None
+    return [standard_employee] if standard_employee else []
 
 
 def initialize_leave_approval(doc, method=None):
@@ -50,11 +72,12 @@ def initialize_leave_approval(doc, method=None):
         })
     doc.custom_approval_stage = "Pending Approver Approval"
     doc.custom_current_approver = approvers[0]
-    doc.leave_approver = approvers[0]
+    doc.leave_approver = frappe.db.get_value("Employee", approvers[0], "user_id")
     doc.status = "Open"
 
 
-def _notify_reviewer(user, doc, event, text):
+def _notify_reviewer(employee_or_user, doc, event, text):
+    user = _approver_delivery_user(employee_or_user) if frappe.db.exists("Employee", employee_or_user) else employee_or_user
     if not user:
         return
     notification = frappe.new_doc("PWA Notification")
@@ -66,8 +89,11 @@ def _notify_reviewer(user, doc, event, text):
     notification.insert(ignore_permissions=True)
 
 
-def _share_with_reviewer(doc, user):
-    """Grant workflow access without requiring the employee to share records."""
+def _share_with_reviewer(doc, employee):
+    """Grant Desk workflow access; portal-only approvers use the scoped API."""
+    user = frappe.db.get_value("Employee", employee, "user_id")
+    if not user:
+        return
     add_docshare(
         doc.doctype,
         doc.name,
@@ -128,11 +154,11 @@ def get_leave_approval_context(name):
             doc.flags.ignore_permissions = True
             doc.save()
             notify_leave_workflow(doc)
-    user = get_effective_approval_user()
+    approver_employee = get_current_approver_employee()
     can_act = (
         doc.docstatus == 0
         and (
-            (doc.custom_approval_stage == "Pending Approver Approval" and doc.custom_current_approver == user)
+            (doc.custom_approval_stage == "Pending Approver Approval" and doc.custom_current_approver == approver_employee and _approver_role_allowed())
             or (doc.custom_approval_stage == "Pending HR Approval" and _is_hr_manager())
         )
     )
@@ -159,15 +185,15 @@ def process_leave_approval(name, action, remarks=None):
     if doc.docstatus != 0 or doc.custom_approval_stage not in ("Pending Approver Approval", "Pending HR Approval"):
         frappe.throw(_("This leave request is no longer waiting for approval."))
 
-    user = get_effective_approval_user()
+    approver_employee = get_current_approver_employee()
     is_hr_step = doc.custom_approval_stage == "Pending HR Approval"
     if is_hr_step:
         if not _is_hr_manager():
             frappe.throw(_("Only an HR Manager can complete the final approval."), frappe.PermissionError)
-    elif doc.custom_current_approver != user:
+    elif doc.custom_current_approver != approver_employee or not _approver_role_allowed():
         frappe.throw(_("This leave request is waiting for another approver."), frappe.PermissionError)
 
-    current_step = next((row for row in doc.custom_approval_steps if row.status == "Pending" and row.approver == user), None)
+    current_step = next((row for row in doc.custom_approval_steps if row.status == "Pending" and row.approver == approver_employee), None)
     if current_step:
         current_step.status = "Approved" if action == "approve" else "Rejected"
         current_step.acted_on = now_datetime()

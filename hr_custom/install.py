@@ -30,7 +30,25 @@ def after_migrate():
     from hr_custom.patches.v1_0.create_custom_fields import execute
     from hr_custom.setup.workspace import ensure_hr_workspace_section
     from hr_custom.api.portal_auth import upgrade_legacy_portal_passwords
-    execute(); ensure_hr_workspace_section(); upgrade_legacy_portal_passwords(); remove_legacy_portal_users()
+    execute(); ensure_hr_workspace_section(); upgrade_legacy_portal_passwords(); migrate_leave_approvers_to_employees(); remove_legacy_portal_users()
+
+
+def migrate_leave_approvers_to_employees():
+    """Convert approver values created before approvers became Employee links."""
+    import frappe
+
+    mappings = {row.user_id: row.name for row in frappe.get_all("Employee", filters={"user_id": ["is", "set"]}, fields=["name", "user_id"])}
+    if not mappings:
+        return
+    for table in ("Employee Leave Approver", "Leave Application Approval Step"):
+        for row in frappe.get_all(table, fields=["name", "approver"], limit_page_length=0):
+            employee = mappings.get(row.approver)
+            if employee:
+                frappe.db.set_value(table, row.name, "approver", employee, update_modified=False)
+    for row in frappe.get_all("Leave Application", filters={"custom_current_approver": ["is", "set"]}, fields=["name", "custom_current_approver"], limit_page_length=0):
+        employee = mappings.get(row.custom_current_approver)
+        if employee:
+            frappe.db.set_value("Leave Application", row.name, "custom_current_approver", employee, update_modified=False)
 
 
 def remove_legacy_portal_users():

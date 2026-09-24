@@ -6,8 +6,8 @@
  "editable_grid": 1,
  "field_order": ["approver", "approver_name", "sequence", "status", "acted_on", "remarks"],
  "fields": [
-  {"fieldname": "approver", "label": "Approver", "fieldtype": "Link", "options": "User", "reqd": 1, "in_list_view": 1, "read_only": 1},
-  {"fieldname": "approver_name", "label": "Approver Name", "fieldtype": "Data", "fetch_from": "approver.full_name", "read_only": 1},
+  {"fieldname": "approver", "label": "Approver Employee", "fieldtype": "Link", "options": "Employee", "reqd": 1, "in_list_view": 1, "read_only": 1},
+  {"fieldname": "approver_name", "label": "Approver Name", "fieldtype": "Data", "fetch_from": "approver.employee_name", "read_only": 1},
   {"fieldname": "sequence", "label": "Sequence", "fieldtype": "Int", "reqd": 1, "in_list_view": 1, "read_only": 1},
   {"fieldname": "status", "label": "Status", "fieldtype": "Select", "options": "Pending\nApproved\nRejected\nSkipped", "default": "Pending", "reqd": 1, "in_list_view": 1, "read_only": 1},
   {"fieldname": "acted_on", "label": "Acted On", "fieldtype": "Datetime", "read_only": 1},

@@ -22,6 +22,7 @@ GROUPS = [
         ("GPS Attendance", "URL", "/attendance", "Green"),
         ("Attendance Correction Request", "DocType", "Attendance Correction Request", "Orange"),
         ("Attendance Exception", "DocType", "Attendance Exception", "Red"),
+        ("Daily Attendance Overview", "Report", "Daily Attendance Overview", "Blue"),
         ("Mobile Checkin Audit", "Report", "Mobile Checkin Audit", "Grey"),
         ("Attendance Exceptions", "Report", "Attendance Exceptions", "Grey"),
         ("Abnormal Attendance Records", "Report", "Abnormal Attendance Records", "Orange"),

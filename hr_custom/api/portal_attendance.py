@@ -212,10 +212,11 @@ def get_correction_detail(name):
 
 @frappe.whitelist()
 def get_correction_approval_queue():
-    from hr_custom.services.simple_leave import _is_hr_manager
+    from hr_custom.services.simple_leave import _is_hr_manager, get_current_approver_employee
     from hr_custom.services.portal_identity import get_effective_approval_user, has_portal_role
 
     user = get_effective_approval_user()
+    approver_employee = get_current_approver_employee()
     is_hr = _is_hr_manager()
     fields = ["name", "employee", "employee_name", "attendance_date", "request_type", "reason", "approval_stage", "current_approver", "creation"]
     rows = frappe.get_all("Attendance Correction Request", filters={"docstatus": ["<", 2], "approval_stage": "Pending Approver Approval", "current_approver": user}, fields=fields, order_by="creation asc")
@@ -227,5 +228,5 @@ def get_correction_approval_queue():
             if row.name not in existing:
                 row.review_mode = "hr_override" if row.approval_stage == "Pending Approver Approval" else "hr"
                 rows.append(row)
-    configured = has_portal_role("Leave Approver") and frappe.db.exists("Employee Leave Approver", {"approver": user, "enabled": 1})
+    configured = has_portal_role("Leave Approver") and frappe.db.exists("Employee Leave Approver", {"approver": approver_employee, "enabled": 1})
     return {"items": rows, "can_review": bool(is_hr or configured)}

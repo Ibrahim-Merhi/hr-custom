@@ -29,7 +29,7 @@ def _employee_for_user():
 
 
 def _allowed_branches(employee, settings):
-    fields = ["name", "custom_enable_mobile_attendance", "custom_branch_latitude", "custom_branch_longitude", "custom_attendance_radius", "custom_max_gps_accuracy", "custom_allow_checkin_without_location"]
+    fields = ["name", "custom_branch_name_arabic", "custom_enable_mobile_attendance", "custom_branch_latitude", "custom_branch_longitude", "custom_attendance_radius", "custom_max_gps_accuracy", "custom_allow_checkin_without_location"]
     names = []
     if frappe.get_meta("Employee").has_field("custom_attendance_branches"):
         names = frappe.get_all("Employee Attendance Branch", filters={"parent": employee.name, "parenttype": "Employee"}, pluck="branch", order_by="idx asc")
@@ -144,7 +144,7 @@ def get_status():
     radius = (flt(branch.custom_attendance_radius) if branch else 0) or flt(settings.default_radius)
     maximum_accuracy = (flt(branch.custom_max_gps_accuracy) if branch else 0) or flt(settings.default_max_gps_accuracy)
     require_location = cint(settings.require_geolocation) and not cint(employee.get("custom_location_not_required")) and not cint(branch.custom_allow_checkin_without_location if branch else 0)
-    return {"employee": employee.name, "employee_name": employee.employee_name, "first_name": employee.first_name, "custom_first_name_ar": employee.get("custom_first_name_ar"), "custom_employee_name_ar": employee.get("custom_employee_name_ar"), "branch": branch.name if branch else None, "allowed_branches": [row.name for row in branches], "configuration_error": configuration_error, "server_time": timestamp, "current_state": "CHECKED IN" if latest and latest.log_type == "IN" else "CHECKED OUT", "next_action": "OUT" if latest and latest.log_type == "IN" else "IN", "last_checkin": latest, "branch_location_enabled": bool(branch), "attendance_radius": radius, "maximum_gps_accuracy": maximum_accuracy, "require_geolocation": require_location, "location_cache_seconds": cint(settings.location_cache_seconds) or 120, "fast_location_timeout": cint(settings.fast_location_timeout) or 5, "high_accuracy_timeout": cint(settings.high_accuracy_timeout) or 12, "portal_tabs": {"attendance": cint(settings.show_attendance_tab), "leaves": cint(settings.show_leaves_tab), "salary": cint(settings.show_salary_tab), "profile": cint(settings.show_profile_tab)}}
+    return {"employee": employee.name, "employee_name": employee.employee_name, "first_name": employee.first_name, "custom_first_name_ar": employee.get("custom_first_name_ar"), "custom_employee_name_ar": employee.get("custom_employee_name_ar"), "branch": branch.name if branch else None, "branch_name_arabic": branch.get("custom_branch_name_arabic") if branch else None, "allowed_branches": [row.name for row in branches], "configuration_error": configuration_error, "server_time": timestamp, "current_state": "CHECKED IN" if latest and latest.log_type == "IN" else "CHECKED OUT", "next_action": "OUT" if latest and latest.log_type == "IN" else "IN", "last_checkin": latest, "branch_location_enabled": bool(branch), "attendance_radius": radius, "maximum_gps_accuracy": maximum_accuracy, "require_geolocation": require_location, "location_cache_seconds": cint(settings.location_cache_seconds) or 120, "fast_location_timeout": cint(settings.fast_location_timeout) or 5, "high_accuracy_timeout": cint(settings.high_accuracy_timeout) or 12, "portal_tabs": {"attendance": cint(settings.show_attendance_tab), "leaves": cint(settings.show_leaves_tab), "salary": cint(settings.show_salary_tab), "profile": cint(settings.show_profile_tab)}}
 
 
 @frappe.whitelist()
@@ -237,24 +237,35 @@ def get_attendance_period(from_date=None, to_date=None):
 
 @frappe.whitelist()
 def get_leave_portal_data():
-    from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
+    from hr_custom.services.hourly_leave import get_hour_leave_balance
+
     employee = _employee_for_user()
     today = getdate(nowdate())
-    allocations = frappe.get_all("Leave Allocation", filters={"employee": employee.name, "docstatus": 1, "from_date": ["<=", today], "to_date": [">=", today]}, fields=["leave_type", "total_leaves_allocated", "from_date", "to_date"], order_by="leave_type asc")
-    balances = []
+    allocations = frappe.get_all("Leave Allocation", filters={"employee": employee.name, "docstatus": 1, "from_date": ["<=", today], "to_date": [">=", today]}, fields=["leave_type", "total_leaves_allocated", "from_date", "to_date"], order_by="leave_type asc", limit_page_length=0)
+    grouped = {}
     for allocation in allocations:
-        remaining = max(0, flt(get_leave_balance_on(employee.name, allocation.leave_type, today, consider_all_leaves_in_the_allocation_period=True), 2))
-        allocated = flt(allocation.total_leaves_allocated, 2)
-        balances.append({"leave_type": allocation.leave_type, "allocated": allocated, "used": max(0, flt(allocated - remaining, 2)), "remaining": remaining, "from_date": allocation.from_date, "to_date": allocation.to_date})
-    requests = frappe.get_all("Leave Application", filters={"employee": employee.name, "docstatus": ["<", 2]}, fields=["name", "leave_type", "from_date", "to_date", "total_leave_days", "status", "description", "custom_approval_stage"], order_by="creation desc", limit=30)
+        item = grouped.setdefault(allocation.leave_type, {"leave_type": allocation.leave_type, "allocated": 0, "from_date": allocation.from_date, "to_date": allocation.to_date})
+        item["allocated"] += flt(allocation.total_leaves_allocated, 2)
+        item["from_date"] = min(item["from_date"], allocation.from_date)
+        item["to_date"] = max(item["to_date"], allocation.to_date)
+    balances = []
+    for leave_type, item in grouped.items():
+        unit = frappe.db.get_value("Leave Type", leave_type, "custom_leave_unit") or "Days"
+        if unit == "Hours":
+            remaining = max(0, flt(get_hour_leave_balance(employee.name, leave_type, today).get("remaining_hours"), 2))
+        else:
+            remaining = max(0, flt(get_leave_balance_on(employee.name, leave_type, today, consider_all_leaves_in_the_allocation_period=True), 2))
+        item.update({"unit": unit, "used": max(0, flt(item["allocated"] - remaining, 2)), "remaining": remaining})
+        balances.append(item)
+    request_fields = ["name", "leave_type", "from_date", "to_date", "total_leave_days", "status", "description", "custom_approval_stage", "custom_leave_unit", "custom_leave_hours"]
+    requests = frappe.get_all("Leave Application", filters={"employee": employee.name, "docstatus": ["<", 2]}, fields=request_fields, order_by="creation desc", limit_page_length=0)
     return {"balances": balances, "requests": requests}
 
 
 def _can_review_leave(doc, user):
-    from hr_custom.services.simple_leave import _is_hr_manager
-    from hr_custom.services.portal_identity import get_effective_approval_user
+    from hr_custom.services.simple_leave import _is_hr_manager, get_current_approver_employee
     own_employee = _employee_for_user().name
-    return doc.employee == own_employee or doc.custom_current_approver == get_effective_approval_user(user) or _is_hr_manager(user)
+    return doc.employee == own_employee or doc.custom_current_approver == get_current_approver_employee(user) or _is_hr_manager(user)
 
 
 @frappe.whitelist()
@@ -265,7 +276,7 @@ def get_portal_leave_detail(name):
     return {
         "name": doc.name, "employee": doc.employee, "employee_name": doc.employee_name,
         "leave_type": doc.leave_type, "from_date": doc.from_date, "to_date": doc.to_date,
-        "total_leave_days": doc.total_leave_days, "description": doc.description,
+        "total_leave_days": doc.total_leave_days, "custom_leave_unit": doc.get("custom_leave_unit"), "custom_leave_hours": doc.get("custom_leave_hours"), "description": doc.description,
         "status": doc.status, "stage": doc.custom_approval_stage,
         "current_approver": doc.custom_current_approver,
         "steps": [{"approver": row.approver, "approver_name": row.approver_name, "sequence": row.sequence, "status": row.status, "acted_on": row.acted_on, "remarks": row.remarks} for row in doc.custom_approval_steps],
@@ -274,12 +285,12 @@ def get_portal_leave_detail(name):
 
 @frappe.whitelist()
 def get_leave_approval_queue():
-    from hr_custom.services.simple_leave import _is_hr_manager
-    from hr_custom.services.portal_identity import get_effective_approval_user, has_portal_role
-    user = get_effective_approval_user()
+    from hr_custom.services.simple_leave import _is_hr_manager, get_current_approver_employee
+    from hr_custom.services.portal_identity import has_portal_role
+    approver_employee = get_current_approver_employee()
     is_hr = _is_hr_manager()
-    fields = ["name", "employee", "employee_name", "leave_type", "from_date", "to_date", "total_leave_days", "description", "status", "custom_approval_stage", "creation"]
-    rows = frappe.get_all("Leave Application", filters={"docstatus": 0, "custom_approval_stage": "Pending Approver Approval", "custom_current_approver": user}, fields=fields, order_by="creation asc", limit=100)
+    fields = ["name", "employee", "employee_name", "leave_type", "from_date", "to_date", "total_leave_days", "custom_leave_unit", "custom_leave_hours", "description", "status", "custom_approval_stage", "creation"]
+    rows = frappe.get_all("Leave Application", filters={"docstatus": 0, "custom_approval_stage": "Pending Approver Approval", "custom_current_approver": approver_employee}, fields=fields, order_by="creation asc", limit=100)
     for row in rows:
         row.review_mode = "approver"
     if is_hr:
@@ -288,7 +299,7 @@ def get_leave_approval_queue():
             row.review_mode = "hr"
         rows.extend(final_rows)
         rows.sort(key=lambda row: row.creation)
-    configured = has_portal_role("Leave Approver") and frappe.db.exists("Employee Leave Approver", {"approver": user, "enabled": 1})
+    configured = has_portal_role("Leave Approver") and frappe.db.exists("Employee Leave Approver", {"approver": approver_employee, "enabled": 1})
     return {"items": rows, "can_review": bool(is_hr or configured)}
 
 

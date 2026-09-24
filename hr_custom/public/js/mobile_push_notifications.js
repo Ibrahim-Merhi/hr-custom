@@ -24,18 +24,33 @@ frappe.ready(async () => {
 		const messaging = getMessaging(initializeApp(config));
 		onMessage(messaging, (payload) => frappe.show_alert({message: payload.data?.body || payload.notification?.body || __("New HR notification"), indicator: "green"}, 8));
 		const stored = localStorage.getItem("firebase_token_hrms");
-		if (stored && Notification.permission === "granted") button.textContent = __("Locked-screen notifications enabled");
+		const subscribe = async () => {
+			const token = await getToken(messaging, {vapidKey, serviceWorkerRegistration: registration});
+			const response = await fetch(`/api/method/hr_custom.api.portal_auth.subscribe_portal_push?fcm_token=${encodeURIComponent(token)}&project_name=hrms`, {credentials: "same-origin"});
+			if (!response.ok) throw new Error(__("Could not register this phone for notifications."));
+			localStorage.setItem("firebase_token_hrms", token);
+			window.hrNotificationRequired = false;
+			window.dispatchEvent(new CustomEvent("hr-push-ready"));
+			button.textContent = __("Locked-screen notifications enabled");
+			setMessage(__("This phone is ready to receive HR notifications."));
+		};
+		if (Notification.permission === "granted") {
+			button.textContent = __("Locked-screen notifications enabled");
+			if (!stored) await subscribe();
+		} else if (Notification.permission === "default") {
+			window.hrNotificationRequired = true;
+			setMessage(__("Locked-screen notifications are required. Tap the button below to enable them."), true);
+			setTimeout(() => document.getElementById("notification-button")?.click(), 650);
+		} else {
+			setMessage(__("Notifications are blocked. Enable them for this app in phone Settings."), true);
+		}
 		button.addEventListener("click", async () => {
 			button.disabled = true; setMessage(__("Enabling notifications…"));
 			try {
 				if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone) throw new Error(__("On iPhone, install this app on the Home Screen first, then enable notifications."));
 				const permission = await Notification.requestPermission();
 				if (permission !== "granted") throw new Error(__("Notification permission was not granted. Enable it in phone Settings."));
-				const token = await getToken(messaging, {vapidKey, serviceWorkerRegistration: registration});
-				const response = await fetch(`/api/method/hr_custom.api.portal_auth.subscribe_portal_push?fcm_token=${encodeURIComponent(token)}&project_name=hrms`, {credentials: "same-origin"});
-				if (!response.ok) throw new Error(__("Could not register this phone for notifications."));
-				localStorage.setItem("firebase_token_hrms", token);
-				button.textContent = __("Locked-screen notifications enabled"); setMessage(__("This phone is ready to receive HR notifications."));
+				await subscribe();
 			} catch (error) { setMessage(error.message || __("Could not enable notifications."), true); }
 			finally { button.disabled = false; }
 		});
