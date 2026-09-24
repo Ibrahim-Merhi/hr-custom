@@ -269,6 +269,27 @@ def _can_review_leave(doc, user):
     return doc.employee == own_employee or doc.custom_current_approver == get_current_approver_employee(user) or _is_hr_manager(user)
 
 
+def _localized_approval_steps(rows):
+    approvers = {row.approver for row in rows if row.approver}
+    fields = ["name", "employee_name"]
+    if frappe.get_meta("Employee").has_field("custom_employee_name_ar"):
+        fields.append("custom_employee_name_ar")
+    employees = frappe.get_all("Employee", filters={"name": ["in", list(approvers)]}, fields=fields) if approvers else []
+    names = {employee.name: employee for employee in employees}
+    return [
+        {
+            "approver": row.approver,
+            "approver_name": (names.get(row.approver) or {}).get("employee_name") or row.approver_name or row.approver,
+            "approver_name_ar": (names.get(row.approver) or {}).get("custom_employee_name_ar"),
+            "sequence": row.sequence,
+            "status": row.status,
+            "acted_on": row.acted_on,
+            "remarks": row.remarks,
+        }
+        for row in rows
+    ]
+
+
 @frappe.whitelist()
 def get_portal_leave_detail(name):
     doc = frappe.get_doc("Leave Application", name)
@@ -280,7 +301,7 @@ def get_portal_leave_detail(name):
         "total_leave_days": doc.total_leave_days, "custom_leave_unit": doc.get("custom_leave_unit"), "custom_leave_hours": doc.get("custom_leave_hours"), "description": doc.description,
         "status": doc.status, "stage": doc.custom_approval_stage,
         "current_approver": doc.custom_current_approver,
-        "steps": [{"approver": row.approver, "approver_name": row.approver_name, "sequence": row.sequence, "status": row.status, "acted_on": row.acted_on, "remarks": row.remarks} for row in doc.custom_approval_steps],
+        "steps": _localized_approval_steps(doc.custom_approval_steps),
     }
 
 
