@@ -1,38 +1,39 @@
 <style>
+	.attendance-print { direction: rtl; font-family: "Noto Naskh Arabic", Tahoma, Arial, sans-serif; }
 	.attendance-print-meta { margin: 8px 0 14px; text-align: center; color: #555; }
-	.attendance-print-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-	.attendance-print-table th, .attendance-print-table td { border: 1px solid #999; padding: 5px 6px; vertical-align: top; }
+	.attendance-print-table { width: 100%; border-collapse: collapse; font-size: 11px; direction: rtl; }
+	.attendance-print-table th, .attendance-print-table td { border: 1px solid #999; padding: 5px 6px; vertical-align: top; text-align: right; }
 	.attendance-print-table th { background: #e9ecef; font-weight: 700; }
 	.attendance-print-table .present { color: #16834a; font-weight: 700; }
 	.attendance-print-table .absent { color: #c73545; font-weight: 700; }
 </style>
 
-<h2 class="text-center">{%= __("Daily Attendance Overview") %}</h2>
+<div class="attendance-print" dir="rtl">
+<h2 class="text-center">تقرير الحضور اليومي</h2>
 <div class="attendance-print-meta">
-	<strong>{%= __(filters.period_type || "Day") %}</strong>
+	<strong>{%= ({Day:"يوم", Week:"أسبوع", Month:"شهر"})[filters.period_type] || filters.period_type %}</strong>
 	&middot; {%= frappe.datetime.str_to_user(filters.date) %}
-	&middot; {%= __(filters.attendance_status || "All") %}
-	{% if (filters.company) { %}&middot; {%= filters.company %}{% } %}
-	{% if (filters.branch) { %}&middot; {%= filters.branch %}{% } %}
-	{% if (filters.department) { %}&middot; {%= filters.department %}{% } %}
+	&middot; {%= ({All:"الكل", Present:"حاضر", Absent:"غائب"})[filters.attendance_status] || filters.attendance_status %}
+	{% if (filters.company) { %}&middot; الشركة: {%= filters.company %}{% } %}
+	{% if (filters.branch) { %}&middot; الفرع: {%= filters.branch %}{% } %}
+	{% if (filters.department) { %}&middot; القسم: {%= filters.department %}{% } %}
 </div>
-
 <table class="attendance-print-table">
 	<thead><tr>
-		<th>{%= __("Employee Name") %}</th><th>{%= __("Date") %}</th><th>{%= __("Day") %}</th>
-		<th>{%= __("Status") %}</th><th>{%= __("First Clock In") %}</th><th>{%= __("Last Clock Out") %}</th>
-		<th>{%= __("Daily Punches") %}</th><th>{%= __("Working Hours") %}</th>
-		<th>{%= __("Department") %}</th><th>{%= __("Branch") %}</th>
+		<th>اسم الموظف</th><th>التاريخ</th><th>اليوم</th><th>الحالة</th>
+		<th>أول تسجيل دخول</th><th>آخر تسجيل خروج</th><th>ساعات العمل</th><th>القسم</th><th>الفرع</th>
 	</tr></thead>
 	<tbody>
-	{% for (var i = 0; i < data.length; i++) { var row = data[i]; %}
+	{% var arabicDays = {Sunday:"الأحد", Monday:"الاثنين", Tuesday:"الثلاثاء", Wednesday:"الأربعاء", Thursday:"الخميس", Friday:"الجمعة", Saturday:"السبت"}; %}
+	{% for (var i = 0; i < data.length; i++) { var row = data[i]; var rawStatus = String(row.status || ""); %}
 		<tr>
-			<td>{%= row.employee_name || "" %}</td><td>{%= row.date || "" %}</td><td>{%= row.day || "" %}</td>
-			<td class="{%= String(row.status || '').toLowerCase() %}">{%= row.status || "" %}</td>
-			<td>{%= row.first_in || "" %}</td><td>{%= row.last_out || "" %}</td><td>{%= row.punches || "" %}</td>
-			<td>{%= row.working_hours || 0 %}</td><td>{%= row.department || "" %}</td><td>{%= row.branch || "" %}</td>
+			<td>{%= row.employee_name_ar || row.employee_name || "" %}</td><td>{%= row.date || "" %}</td><td>{%= arabicDays[row.day] || row.day || "" %}</td>
+			<td class="{%= rawStatus.toLowerCase() %}">{%= rawStatus === "Present" ? "حاضر" : rawStatus === "Absent" ? "غائب" : rawStatus %}</td>
+			<td>{%= row.first_in || "" %}</td><td>{%= row.last_out || "" %}</td><td>{%= row.working_hours || 0 %}</td>
+			<td>{%= row.department || "" %}</td><td>{%= row.branch || "" %}</td>
 		</tr>
 	{% } %}
 	</tbody>
 </table>
-<p class="text-right text-muted">{%= __("Printed On") %} {%= frappe.datetime.str_to_user(frappe.datetime.get_datetime_as_string()) %}</p>
+<p class="text-left text-muted">تاريخ الطباعة: {%= frappe.datetime.str_to_user(frappe.datetime.get_datetime_as_string()) %}</p>
+</div>

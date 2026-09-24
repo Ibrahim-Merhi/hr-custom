@@ -45,16 +45,15 @@ def execute(filters=None):
 			worked = (last_out - first_in).total_seconds() / 3600 if first_in and last_out and last_out > first_in else 0
 			rows.append({
 				"employee": employee.name,
-				"attendance_device_id": employee.attendance_device_id,
 				"employee_name": employee.employee_name,
+				"employee_name_ar": employee.custom_employee_name_ar,
 				"department": employee.department,
 				"branch": employee.branch,
 				"date": date,
 				"day": _(date.strftime("%A")),
 				"status": _(status),
-				"first_in": first_in,
-				"last_out": last_out,
-				"punches": ", ".join(f"{row.log_type} {row.time.strftime('%H:%M')}" for row in day_logs),
+				"first_in": first_in.strftime("%H:%M:%S") if first_in else None,
+				"last_out": last_out.strftime("%H:%M:%S") if last_out else None,
 				"working_hours": worked,
 			})
 			date += timedelta(days=1)
@@ -79,7 +78,7 @@ def _employees(filters, start, end):
 	return frappe.get_all(
 		"Employee",
 		filters=query_filters,
-		fields=["name", "attendance_device_id", "employee_name", "department", "branch", "date_of_joining", "relieving_date"],
+		fields=["name", "employee_name", "custom_employee_name_ar", "department", "branch", "date_of_joining", "relieving_date"],
 		order_by="employee_name asc",
 		limit_page_length=0,
 	)
@@ -91,9 +90,8 @@ def _columns():
 		{"label": _("Date"), "fieldname": "date", "fieldtype": "Date", "width": 105},
 		{"label": _("Day"), "fieldname": "day", "width": 100},
 		{"label": _("Status"), "fieldname": "status", "width": 90},
-		{"label": _("First Clock In"), "fieldname": "first_in", "fieldtype": "Datetime", "width": 150},
-		{"label": _("Last Clock Out"), "fieldname": "last_out", "fieldtype": "Datetime", "width": 150},
-		{"label": _("Daily Punches"), "fieldname": "punches", "width": 260},
+		{"label": _("First Clock In"), "fieldname": "first_in", "fieldtype": "Time", "width": 110},
+		{"label": _("Last Clock Out"), "fieldname": "last_out", "fieldtype": "Time", "width": 110},
 		{"label": _("Working Hours"), "fieldname": "working_hours", "fieldtype": "Float", "precision": 2, "width": 110},
 		{"label": _("Department"), "fieldname": "department", "fieldtype": "Link", "options": "Department", "width": 140},
 		{"label": _("Branch"), "fieldname": "branch", "fieldtype": "Link", "options": "Branch", "width": 130},
