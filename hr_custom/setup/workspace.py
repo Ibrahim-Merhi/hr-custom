@@ -49,9 +49,13 @@ MANAGER_NUMBER_CARDS = (
 )
 
 MANAGER_CHARTS = (
-    "Employees by Branch", "Department Wise Employee Count", "Attendance Count",
-    "HR Leave Distribution", "Hiring vs Attrition Count", "Outgoing Salary",
-    "Department Wise Salary(Last Month)",
+    ("Employees by Branch", "Employees by Branch"),
+    ("Employees by Department", "Department Wise Employee Count"),
+    ("Monthly Attendance Trend", "Attendance Count"),
+    ("Leave Distribution", "HR Leave Distribution"),
+    ("Employee Joining and Leaving Trend", "Hiring vs Attrition Count"),
+    ("Payroll by Month", "Outgoing Salary"),
+    ("Salary Distribution by Branch or Cost Center", "Department Wise Salary(Last Month)"),
 )
 
 MANAGER_SHORTCUTS = (
@@ -63,8 +67,15 @@ MANAGER_SHORTCUTS = (
 )
 
 MANAGER_REPORTS = (
-    "Monthly Attendance Sheet", "Employee Leave Balance", "Salary Register",
-    "Employee Analytics", "Employee Information",
+    ("Employee Attendance", "Report", "Daily Attendance Overview"),
+    ("Monthly Attendance Sheet", "Report", "Monthly Attendance Sheet"),
+    ("Employee Leave Balance", "Report", "Employee Leave Balance"),
+    ("Payroll Register", "Report", "Salary Register"),
+    ("Salary Register", "Report", "Salary Register"),
+    ("Employee Working Branches", "Report", "Attendance Branch Report"),
+    ("Employee Salary Accounts", "DocType", "Employee"),
+    ("Payroll Cost-Center Allocation", "DocType", "Payroll Cost Center Allocation"),
+    ("Employee Monthly Adjustments", "DocType", "Employee Monthly Adjustment"),
 )
 
 
@@ -99,6 +110,7 @@ def ensure_hr_workspace_section():
 def _ensure_hr_manager_dashboard(doc):
     card_names = _ensure_manager_number_cards()
     _ensure_leave_distribution_chart()
+    chart_names = _ensure_manager_charts()
     content = json.loads(doc.content or "[]")
     dashboard = [{"id": f"{PREFIX}manager_header", "type": "header", "data": {"text": "<span class=\"h4\"><b>HR Manager Dashboard</b></span>", "col": 12}}]
     for index, (configured_name, *_rest) in enumerate(MANAGER_NUMBER_CARDS, 1):
@@ -107,9 +119,8 @@ def _ensure_hr_manager_dashboard(doc):
         {"id": f"{PREFIX}manager_spacer_1", "type": "spacer", "data": {"col": 12}},
         {"id": f"{PREFIX}manager_analytics_header", "type": "header", "data": {"text": "<span class=\"h4\"><b>HR Analytics</b></span>", "col": 12}},
     ])
-    for index, chart_name in enumerate(MANAGER_CHARTS, 1):
-        if frappe.db.exists("Dashboard Chart", chart_name):
-            dashboard.append({"id": f"{PREFIX}manager_chart_{index}", "type": "chart", "data": {"chart_name": chart_name, "col": 6}})
+    for index, chart_name in enumerate(chart_names, 1):
+        dashboard.append({"id": f"{PREFIX}manager_chart_{index}", "type": "chart", "data": {"chart_name": chart_name, "col": 6}})
     dashboard.extend([
         {"id": f"{PREFIX}manager_spacer_2", "type": "spacer", "data": {"col": 12}},
         {"id": f"{PREFIX}manager_operations_header", "type": "header", "data": {"text": "<span class=\"h4\"><b>HR Operations</b></span>", "col": 12}},
@@ -128,10 +139,10 @@ def _ensure_hr_manager_dashboard(doc):
     for configured_name, label, *_rest in MANAGER_NUMBER_CARDS:
         doc.append("number_cards", {"number_card_name": card_names[configured_name], "label": label})
 
-    doc.set("charts", [row.as_dict() for row in doc.charts if row.chart_name not in MANAGER_CHARTS])
-    for chart_name in MANAGER_CHARTS:
-        if frappe.db.exists("Dashboard Chart", chart_name):
-            doc.append("charts", {"chart_name": chart_name, "label": chart_name})
+    managed_chart_names = {value for pair in MANAGER_CHARTS for value in pair}
+    doc.set("charts", [row.as_dict() for row in doc.charts if row.chart_name not in managed_chart_names])
+    for chart_name in chart_names:
+        doc.append("charts", {"chart_name": chart_name, "label": chart_name})
 
     managed_shortcuts = {label for label, _link_type in MANAGER_SHORTCUTS}
     doc.set("shortcuts", [row.as_dict() for row in doc.shortcuts if row.label not in managed_shortcuts])
@@ -139,13 +150,44 @@ def _ensure_hr_manager_dashboard(doc):
         if frappe.db.exists(link_type, label):
             doc.append("shortcuts", {"label": label, "type": link_type, "link_to": label, "doc_view": "List"})
 
-    managed_reports = set(MANAGER_REPORTS)
-    links = [row.as_dict() for row in doc.links if not ((row.type == "Card Break" and row.label == "HR Manager Reports") or (row.type == "Link" and row.link_to in managed_reports))]
+    managed_reports = {target for _label, _link_type, target in MANAGER_REPORTS} | {"Employee Analytics", "Employee Information"}
+    managed_report_labels = {label for label, _link_type, _target in MANAGER_REPORTS} | {"Employee Analytics", "Employee Information"}
+    links = [row.as_dict() for row in doc.links if not ((row.type == "Card Break" and row.label == "HR Manager Reports") or (row.type == "Link" and (row.link_to in managed_reports or row.label in managed_report_labels)))]
     links.append({"type": "Card Break", "label": "HR Manager Reports"})
-    for report in MANAGER_REPORTS:
-        if frappe.db.exists("Report", report):
-            links.append({"type": "Link", "label": report, "link_type": "Report", "link_to": report, "is_query_report": 1})
+    for label, link_type, target in MANAGER_REPORTS:
+        if frappe.db.exists(link_type, target):
+            row = {"type": "Link", "label": label, "link_type": link_type, "link_to": target}
+            if link_type == "Report":
+                row["is_query_report"] = 1
+            links.append(row)
     doc.set("links", links)
+
+
+def _ensure_manager_charts():
+    """Install manager-facing copies with stable, descriptive dashboard titles."""
+    installed = []
+    for chart_name, source_name in MANAGER_CHARTS:
+        if chart_name == source_name:
+            if frappe.db.exists("Dashboard Chart", chart_name):
+                installed.append(chart_name)
+            continue
+        if not frappe.db.exists("Dashboard Chart", source_name):
+            continue
+        source = frappe.get_doc("Dashboard Chart", source_name)
+        values = source.as_dict(no_nulls=False)
+        for key in ("name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "doctype", "is_standard", "last_synced_on"):
+            values.pop(key, None)
+        values.update({"chart_name": chart_name, "module": "HR Custom", "is_standard": 0})
+        if frappe.db.exists("Dashboard Chart", chart_name):
+            chart = frappe.get_doc("Dashboard Chart", chart_name)
+            chart.update(values)
+            chart.save(ignore_permissions=True)
+        else:
+            chart = frappe.get_doc({"doctype": "Dashboard Chart", **values})
+            chart.name = chart_name
+            chart.insert(ignore_permissions=True)
+        installed.append(chart_name)
+    return installed
 
 
 def _ensure_manager_number_cards():
