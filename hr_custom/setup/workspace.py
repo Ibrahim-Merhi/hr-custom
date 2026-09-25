@@ -3,6 +3,7 @@ import json
 import frappe
 
 PREFIX = "hr_custom_"
+DASHBOARD_COMPANY = "Itihad"
 GROUPS = [
     ("Employee Communications", [
         ("HR Announcement", "DocType", "HR Announcement", "Green"),
@@ -16,7 +17,6 @@ GROUPS = [
         ("Yearly Leave Allocation", "DocType", "Yearly Leave Allocation", "Green"),
         ("Yearly Leave Allocation Summary", "Report", "Yearly Leave Allocation Summary", "Blue"),
         ("Leave Allocation", "DocType", "Leave Allocation", "Grey"),
-        ("Leave Application", "DocType", "Leave Application", "Grey"),
     ]),
     ("Attendance Operations", [
         ("GPS Attendance", "URL", "/attendance", "Green"),
@@ -36,6 +36,13 @@ GROUPS = [
     ]),
 ]
 LABELS = {item[0] for _, items in GROUPS for item in items} | {"Mobile Attendance", "HR Attendance Dashboard", "Daily Attendance Overview"}
+
+CUSTOM_CARD_METHODS = {
+    "HR Active Employees": "hr_custom.services.workspace_cards.active_employees",
+    "HR Present Today": "hr_custom.services.workspace_cards.present_today",
+    "HR Absent Today": "hr_custom.services.workspace_cards.absent_today",
+    "HR On Leave Today": "hr_custom.services.workspace_cards.on_leave_today",
+}
 
 MANAGER_NUMBER_CARDS = (
     ("HR Active Employees", "Active Employees", "Employee", [["status", "=", "Active"]], []),
@@ -169,6 +176,14 @@ def _ensure_manager_charts():
     for chart_name, source_name in MANAGER_CHARTS:
         if chart_name == source_name:
             if frappe.db.exists("Dashboard Chart", chart_name):
+                chart = frappe.get_doc("Dashboard Chart", chart_name)
+                values = chart.as_dict(no_nulls=False)
+                _pin_chart_company(values)
+                frappe.db.set_value(
+                    "Dashboard Chart", chart_name,
+                    {"filters_json": values["filters_json"], "dynamic_filters_json": values["dynamic_filters_json"]},
+                    update_modified=False,
+                )
                 installed.append(chart_name)
             continue
         if not frappe.db.exists("Dashboard Chart", source_name):
@@ -177,6 +192,7 @@ def _ensure_manager_charts():
         values = source.as_dict(no_nulls=False)
         for key in ("name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "doctype", "is_standard", "last_synced_on"):
             values.pop(key, None)
+        _pin_chart_company(values)
         values.update({"chart_name": chart_name, "module": "HR Custom", "is_standard": 0})
         if frappe.db.exists("Dashboard Chart", chart_name):
             chart = frappe.get_doc("Dashboard Chart", chart_name)
@@ -190,16 +206,41 @@ def _ensure_manager_charts():
     return installed
 
 
+def _pin_chart_company(values):
+    """Use the HR operating company instead of the unrelated site default."""
+    dynamic = json.loads(values.get("dynamic_filters_json") or "[]")
+    if isinstance(dynamic, list):
+        dynamic = [row for row in dynamic if len(row) < 2 or row[1] != "company"]
+    elif isinstance(dynamic, dict):
+        dynamic.pop("company", None)
+    values["dynamic_filters_json"] = json.dumps(dynamic)
+
+    filters = json.loads(values.get("filters_json") or "[]")
+    if isinstance(filters, list) and values.get("document_type"):
+        filters = [row for row in filters if len(row) < 2 or row[1] != "company"]
+        filters.append([values["document_type"], "company", "=", DASHBOARD_COMPANY, False])
+    elif isinstance(filters, dict):
+        filters["company"] = DASHBOARD_COMPANY
+    values["filters_json"] = json.dumps(filters)
+
+
 def _ensure_manager_number_cards():
     card_names = {}
-    company_filter = ["company", "=", "frappe.defaults.get_user_default(\"Company\")"]
+    company_filter = ["company", "=", DASHBOARD_COMPANY]
     for configured_name, label, document_type, filters, dynamic_filters in MANAGER_NUMBER_CARDS:
         values = {
             "label": label, "type": "Document Type", "document_type": document_type, "function": "Count",
-            "filters_json": json.dumps([[document_type, *item, False] for item in filters]),
-            "dynamic_filters_json": json.dumps([[document_type, *company_filter], *[[document_type, *item] for item in dynamic_filters]]),
+            "filters_json": json.dumps([[document_type, *company_filter, False], *[[document_type, *item, False] for item in filters]]),
+            "dynamic_filters_json": json.dumps([[document_type, *item] for item in dynamic_filters]),
             "is_public": 1, "is_standard": 0, "module": "HR Custom", "show_percentage_stats": 0,
         }
+        if configured_name in CUSTOM_CARD_METHODS:
+            values.update({
+                "type": "Custom",
+                "method": CUSTOM_CARD_METHODS[configured_name],
+                "filters_json": "[]",
+                "dynamic_filters_json": "[]",
+            })
         existing_name = frappe.db.get_value("Number Card", {"label": label, "module": ["in", ["HR Custom", "Accounting Custom"]]}, "name")
         if existing_name:
             card = frappe.get_doc("Number Card", existing_name)
