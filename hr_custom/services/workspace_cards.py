@@ -17,7 +17,7 @@ def _active_employee_names(today=None):
     today = getdate(today or nowdate())
     return frappe.get_all(
         "Employee",
-        filters={"company": COMPANY, "status": "Active", "date_of_joining": ["<=", today]},
+        filters={"company": COMPANY, "status": "Active", "date_of_joining": ["<=", today], "custom_is_payroll_identity": 0},
         pluck="name",
         limit_page_length=0,
     )
@@ -25,8 +25,8 @@ def _active_employee_names(today=None):
 
 @frappe.whitelist()
 def active_employees(filters=None):
-    value = frappe.db.count("Employee", {"company": COMPANY, "status": "Active"})
-    return _result(value, ["List", "Employee"], {"company": COMPANY, "status": "Active"})
+    value = frappe.db.count("Employee", {"company": COMPANY, "status": "Active", "custom_is_payroll_identity": 0})
+    return _result(value, ["List", "Employee"], {"company": COMPANY, "status": "Active", "custom_is_payroll_identity": 0})
 
 
 def _present_employee_names(today=None):

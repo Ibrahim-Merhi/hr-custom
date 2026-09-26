@@ -45,12 +45,12 @@ CUSTOM_CARD_METHODS = {
 }
 
 MANAGER_NUMBER_CARDS = (
-    ("HR Active Employees", "Active Employees", "Employee", [["status", "=", "Active"]], []),
+    ("HR Active Employees", "Active Employees", "Employee", [["status", "=", "Active"], ["custom_is_payroll_identity", "=", 0]], []),
     ("HR Present Today", "Present Today", "Attendance", [["status", "=", "Present"], ["docstatus", "=", 1]], [["attendance_date", "=", "frappe.datetime.get_today()"]]),
     ("HR Absent Today", "Absent Today", "Attendance", [["status", "=", "Absent"], ["docstatus", "=", 1]], [["attendance_date", "=", "frappe.datetime.get_today()"]]),
     ("HR On Leave Today", "Employees on Leave Today", "Attendance", [["status", "=", "On Leave"], ["docstatus", "=", 1]], [["attendance_date", "=", "frappe.datetime.get_today()"]]),
-    ("HR New Employees This Month", "New Employees This Month", "Employee", [], [["date_of_joining", ">=", "frappe.datetime.month_start()"], ["date_of_joining", "<=", "frappe.datetime.month_end()"]]),
-    ("HR Employees Leaving Soon", "Employees Leaving Soon", "Employee", [["status", "=", "Active"]], [["relieving_date", ">=", "frappe.datetime.get_today()"], ["relieving_date", "<=", "frappe.datetime.add_days(frappe.datetime.get_today(), 30)"]]),
+    ("HR New Employees This Month", "New Employees This Month", "Employee", [["custom_is_payroll_identity", "=", 0]], [["date_of_joining", ">=", "frappe.datetime.month_start()"], ["date_of_joining", "<=", "frappe.datetime.month_end()"]]),
+    ("HR Employees Leaving Soon", "Employees Leaving Soon", "Employee", [["status", "=", "Active"], ["custom_is_payroll_identity", "=", 0]], [["relieving_date", ">=", "frappe.datetime.get_today()"], ["relieving_date", "<=", "frappe.datetime.add_days(frappe.datetime.get_today(), 30)"]]),
     ("HR Pending Leave Applications", "Pending Leave Applications", "Leave Application", [["status", "=", "Open"], ["docstatus", "=", 0]], []),
     ("HR Pending Expense Claims", "Pending Expense Claims", "Expense Claim", [["approval_status", "=", "Draft"], ["docstatus", "=", 0]], []),
 )
@@ -219,6 +219,8 @@ def _pin_chart_company(values):
     if isinstance(filters, list) and values.get("document_type"):
         filters = [row for row in filters if len(row) < 2 or row[1] != "company"]
         filters.append([values["document_type"], "company", "=", DASHBOARD_COMPANY, False])
+        if values["document_type"] == "Employee":
+            filters.append(["Employee", "custom_is_payroll_identity", "=", 0, False])
     elif isinstance(filters, dict):
         filters["company"] = DASHBOARD_COMPANY
     values["filters_json"] = json.dumps(filters)
