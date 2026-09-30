@@ -1,46 +1,24 @@
 frappe.ready(() => {
 	const byId = (id) => document.getElementById(id);
+	const portalIsAuthenticated = document.querySelector(".attendance-shell")?.dataset.authenticated === "1";
 	let viewportFrame = 0;
-	let previousViewportHeight = window.visualViewport?.height || window.innerHeight;
-	const restoreLoginViewport = () => {
-		document.documentElement.classList.remove("portal-keyboard-open");
-		requestAnimationFrame(() => window.scrollTo(0, 0));
-		setTimeout(() => window.scrollTo(0, 0), 260);
-	};
-	window.hrPortalRestoreLoginViewport = restoreLoginViewport;
 	const updatePortalHeight = () => {
+		if (!portalIsAuthenticated) return;
 		if (viewportFrame) cancelAnimationFrame(viewportFrame);
 		viewportFrame = requestAnimationFrame(() => {
 			viewportFrame = 0;
 			const height = window.visualViewport?.height || window.innerHeight;
-			const viewportExpanded = height > previousViewportHeight + 80;
-			previousViewportHeight = height;
 			document.documentElement.style.setProperty("--portal-height", `${Math.round(height)}px`);
-			if (document.documentElement.classList.contains("portal-keyboard-open") && viewportExpanded) {
-				restoreLoginViewport();
-			}
 		});
 	};
-	const loginInputFocused = () => document.activeElement?.matches?.("#login-form input");
 	updatePortalHeight();
 	window.addEventListener("resize", updatePortalHeight, {passive: true});
 	window.addEventListener("orientationchange", () => setTimeout(updatePortalHeight, 120), {passive: true});
 	window.visualViewport?.addEventListener("resize", updatePortalHeight, {passive: true});
-	document.addEventListener("focusin", (event) => {
-		if (!event.target.matches?.("#login-form input")) return;
-		document.documentElement.classList.add("portal-keyboard-open");
-	});
-	document.addEventListener("focusout", (event) => {
-		if (!event.target.matches?.("#login-form input")) return;
-		setTimeout(() => {
-			if (!loginInputFocused()) restoreLoginViewport();
-			updatePortalHeight();
-		}, 220);
-	});
 	setTimeout(() => byId("app-splash")?.classList.add("is-ready"), 900);
 	const setText = (id, value) => { const node = byId(id); if (node) node.textContent = value ?? ""; };
 	const shell = document.querySelector(".attendance-shell");
-	const authenticated = shell?.dataset.authenticated === "1";
+	const authenticated = portalIsAuthenticated;
 	const isArabic = (frappe.boot?.lang || "").startsWith("ar");
 	const nativeTranslate = window.__;
 	const arabicPortalTranslations = {
@@ -854,7 +832,6 @@ frappe.ready(() => {
 				setText("login-button", __("Sign In"));
 				feedback(error.message || __("Invalid portal username or password."), "error");
 				document.activeElement?.blur?.();
-				restoreLoginViewport();
 			}
 		});
 		return;
