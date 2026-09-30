@@ -1,13 +1,30 @@
 frappe.ready(() => {
 	const byId = (id) => document.getElementById(id);
 	const updatePortalHeight = () => {
-		const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+		const viewport = window.visualViewport;
+		const height = viewport ? viewport.height : window.innerHeight;
+		const keyboardOpen = viewport
+			? height < window.innerHeight * 0.78
+			: document.activeElement?.matches?.("input, textarea, select");
 		document.documentElement.style.setProperty("--portal-height", `${Math.round(height)}px`);
+		document.documentElement.classList.toggle("portal-keyboard-open", Boolean(keyboardOpen));
 	};
 	updatePortalHeight();
 	window.addEventListener("resize", updatePortalHeight, {passive: true});
 	window.addEventListener("orientationchange", () => setTimeout(updatePortalHeight, 120), {passive: true});
-	if (window.visualViewport) window.visualViewport.addEventListener("resize", updatePortalHeight, {passive: true});
+	if (window.visualViewport) {
+		window.visualViewport.addEventListener("resize", updatePortalHeight, {passive: true});
+		window.visualViewport.addEventListener("scroll", updatePortalHeight, {passive: true});
+	}
+	document.addEventListener("focusin", (event) => {
+		if (!event.target.matches?.("#login-form input")) return;
+		document.documentElement.classList.add("portal-keyboard-open");
+		requestAnimationFrame(() => event.target.scrollIntoView({block: "nearest", behavior: "smooth"}));
+	});
+	document.addEventListener("focusout", (event) => {
+		if (!event.target.matches?.("#login-form input")) return;
+		setTimeout(updatePortalHeight, 180);
+	});
 	setTimeout(() => byId("app-splash")?.classList.add("is-ready"), 900);
 	const setText = (id, value) => { const node = byId(id); if (node) node.textContent = value ?? ""; };
 	const shell = document.querySelector(".attendance-shell");
