@@ -1,12 +1,24 @@
 frappe.ready(() => {
 	const byId = (id) => document.getElementById(id);
 	let viewportFrame = 0;
+	let previousViewportHeight = window.visualViewport?.height || window.innerHeight;
+	const restoreLoginViewport = () => {
+		document.documentElement.classList.remove("portal-keyboard-open");
+		requestAnimationFrame(() => window.scrollTo(0, 0));
+		setTimeout(() => window.scrollTo(0, 0), 260);
+	};
+	window.hrPortalRestoreLoginViewport = restoreLoginViewport;
 	const updatePortalHeight = () => {
 		if (viewportFrame) cancelAnimationFrame(viewportFrame);
 		viewportFrame = requestAnimationFrame(() => {
 			viewportFrame = 0;
 			const height = window.visualViewport?.height || window.innerHeight;
+			const viewportExpanded = height > previousViewportHeight + 80;
+			previousViewportHeight = height;
 			document.documentElement.style.setProperty("--portal-height", `${Math.round(height)}px`);
+			if (document.documentElement.classList.contains("portal-keyboard-open") && viewportExpanded) {
+				restoreLoginViewport();
+			}
 		});
 	};
 	const loginInputFocused = () => document.activeElement?.matches?.("#login-form input");
@@ -17,12 +29,11 @@ frappe.ready(() => {
 	document.addEventListener("focusin", (event) => {
 		if (!event.target.matches?.("#login-form input")) return;
 		document.documentElement.classList.add("portal-keyboard-open");
-		updatePortalHeight();
 	});
 	document.addEventListener("focusout", (event) => {
 		if (!event.target.matches?.("#login-form input")) return;
 		setTimeout(() => {
-			if (!loginInputFocused()) document.documentElement.classList.remove("portal-keyboard-open");
+			if (!loginInputFocused()) restoreLoginViewport();
 			updatePortalHeight();
 		}, 220);
 	});
@@ -838,7 +849,13 @@ frappe.ready(() => {
 				const data = await response.json();
 				if (!response.ok || !data.message?.authenticated) throw new Error(data.message || __("Invalid portal username or password."));
 				localStorage.setItem("hr_attendance_logged_in", "1"); location.replace(`/attendance?login=${Date.now()}`);
-			} catch (error) { button.disabled = false; setText("login-button", __("Sign In")); feedback(error.message || __("Invalid portal username or password."), "error"); }
+			} catch (error) {
+				button.disabled = false;
+				setText("login-button", __("Sign In"));
+				feedback(error.message || __("Invalid portal username or password."), "error");
+				document.activeElement?.blur?.();
+				restoreLoginViewport();
+			}
 		});
 		return;
 	}
