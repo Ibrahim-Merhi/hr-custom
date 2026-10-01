@@ -4,3 +4,4 @@
 hr_custom.patches.v1_0.create_custom_fields.execute
 hr_custom.patches.v1_0.configure_employee_portal_defaults
 hr_custom.patches.v1_0.backfill_yearly_allocation_employee_status
+hr_custom.patches.v1_0.set_fast_precise_location_timeout

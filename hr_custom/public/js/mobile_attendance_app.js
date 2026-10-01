@@ -133,6 +133,10 @@ frappe.ready(() => {
 	}
 
 	let coords = null;
+	let coordsCapturedAt = 0;
+	let locationRefreshTimer = null;
+	let locationRetryCount = 0;
+	let lastForegroundRefresh = 0;
 	let busy = false;
 	let status = null;
 	let clockOffset = 0;
@@ -224,13 +228,37 @@ frappe.ready(() => {
 		return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, options));
 	}
 
+	function locationMaxAge() {
+		return Math.max(30, Number(status?.location_cache_seconds || 120)) * 1000;
+	}
+
+	function locationIsFresh() {
+		return Boolean(coords && coordsCapturedAt && Date.now() - coordsCapturedAt <= locationMaxAge());
+	}
+
+	function scheduleLocationRefresh() {
+		clearTimeout(locationRefreshTimer);
+		if (!status?.require_geolocation) return;
+		const accurate = coords && coords.accuracy <= (status.maximum_gps_accuracy || Infinity);
+		if (!accurate && locationRetryCount > 3) return;
+		const delay = accurate ? locationMaxAge() : Math.min(30000, 5000 * Math.max(1, locationRetryCount));
+		locationRefreshTimer = setTimeout(async () => {
+			if (!document.hidden && activeSection === "attendance") await locate(true);
+			scheduleLocationRefresh();
+		}, delay);
+	}
+
 	function acceptPosition(position, quiet = false) {
 		coords = position.coords;
+		coordsCapturedAt = Number(position.timestamp) || Date.now();
 		setText("location-title", __("Location ready"));
 		setText("location", __("Accuracy: {0} meters", [Math.round(coords.accuracy)]));
-		if (byId("action") && !busy) byId("action").disabled = false;
+		const accurate = coords.accuracy <= (status?.maximum_gps_accuracy || Infinity);
+		locationRetryCount = accurate ? 0 : locationRetryCount + 1;
+		if (byId("action") && !busy) byId("action").disabled = !accurate;
 		if (byId("retry")) byId("retry").hidden = true;
 		if (!quiet) feedback("");
+		scheduleLocationRefresh();
 	}
 
 	async function locate(forceAccurate = false) {
@@ -246,18 +274,25 @@ frappe.ready(() => {
 			try {
 				const cacheSeconds = status?.location_cache_seconds || 120;
 				const fastTimeout = (status?.fast_location_timeout || 5) * 1000;
-				const preciseTimeout = (status?.high_accuracy_timeout || 12) * 1000;
+				const preciseTimeout = Math.min(status?.high_accuracy_timeout || 5, 5) * 1000;
 				if (!forceAccurate) {
+					const preciseRequest = geoPosition({enableHighAccuracy: true, timeout: preciseTimeout, maximumAge: 0})
+						.then((position) => ({position}), (error) => ({error}));
 					try {
 						const quick = await geoPosition({enableHighAccuracy: false, timeout: fastTimeout, maximumAge: cacheSeconds * 1000});
 						acceptPosition(quick);
-						geoPosition({enableHighAccuracy: true, timeout: preciseTimeout, maximumAge: 15000}).then((precise) => {
-							if (!coords || precise.coords.accuracy < coords.accuracy) acceptPosition(precise, true);
-						}).catch(() => {});
+						preciseRequest.then((result) => {
+							if (result.position && (!coords || result.position.coords.accuracy < coords.accuracy)) acceptPosition(result.position, true);
+						});
 						return quick.coords;
-					} catch (_) { /* immediately continue with precise GPS */ }
+					} catch (quickError) {
+						const result = await preciseRequest;
+						if (result.error) throw result.error;
+						acceptPosition(result.position);
+						return result.position.coords;
+					}
 				}
-				const precise = await geoPosition({enableHighAccuracy: true, timeout: preciseTimeout, maximumAge: forceAccurate ? 0 : 15000});
+				const precise = await geoPosition({enableHighAccuracy: true, timeout: preciseTimeout, maximumAge: 0});
 				acceptPosition(precise);
 				return precise.coords;
 			} catch (error) {
@@ -266,6 +301,10 @@ frappe.ready(() => {
 				setText("location", errors[error.code] || error.message);
 				if (byId("retry")) byId("retry").hidden = false;
 				feedback(errors[error.code] || error.message, "error");
+				if ([2, 3].includes(error.code)) {
+					locationRetryCount += 1;
+					scheduleLocationRefresh();
+				}
 				return null;
 			} finally { locatingPromise = null; }
 		})();
@@ -275,7 +314,7 @@ frappe.ready(() => {
 	async function refresh(reacquireLocation = false) {
 		try {
 			renderStatus(await api("hr_custom.api.attendance_clock_v2.get_status"));
-			if (reacquireLocation) locate(false);
+			if (reacquireLocation) await locate(true);
 		} catch (error) { feedback(error.message, "error"); }
 	}
 
@@ -839,7 +878,7 @@ frappe.ready(() => {
 
 	localStorage.setItem("hr_attendance_logged_in", "1");
 	byId("retry").onclick = () => locate(true);
-	byId("refresh-button").onclick = () => refreshApp();
+	byId("refresh-button").onclick = () => refreshApp({reacquireLocation: true});
 	byId("notification-button").onclick = openNotifications;
 	byId("notification-close").onclick = closeNotifications;
 	byId("notification-sheet").addEventListener("click", (event) => { if (event.target === byId("notification-sheet")) closeNotifications(); });
@@ -927,7 +966,7 @@ frappe.ready(() => {
 			await showAppDialog({title: __("Location not required"), message: __("Your attendance policy allows check-in without GPS."), icon: "⌖"});
 			return;
 		}
-		if (!coords || coords.accuracy > (status.maximum_gps_accuracy || Infinity)) await locate(true);
+		await locate(true);
 		await showAppDialog({title: byId("location-title").textContent, message: byId("location").textContent, icon: coords ? "✓" : "!"});
 	};
 	byId("history-card").addEventListener("toggle", (event) => { if (event.target.open) loadHistory(); });
@@ -976,11 +1015,11 @@ frappe.ready(() => {
 	});
 	byId("action").onclick = async () => {
 		if (busy) return;
-		if (status?.require_geolocation && (!coords || coords.accuracy > status.maximum_gps_accuracy)) {
+		if (status?.require_geolocation && (!locationIsFresh() || coords.accuracy > status.maximum_gps_accuracy)) {
 			feedback(__("Getting the required GPS accuracy…"));
 			await locate(true);
 		}
-		if (status?.require_geolocation && !coords) return;
+		if (status?.require_geolocation && (!coords || !locationIsFresh() || coords.accuracy > status.maximum_gps_accuracy)) return;
 		busy = true; byId("action").disabled = true; setText("action-label", __("VALIDATING…"));
 		feedback(__("Checking GPS and branch geofence…"));
 		try {
@@ -1014,6 +1053,19 @@ frappe.ready(() => {
 			setText("action-label", status?.next_action === "IN" ? __("CLOCK IN") : __("CLOCK OUT"));
 		}
 	};
+
+	const refreshOnForeground = () => {
+		if (document.hidden || Date.now() - lastForegroundRefresh < 1500) return;
+		lastForegroundRefresh = Date.now();
+		refreshApp({reacquireLocation: true});
+	};
+	document.addEventListener("visibilitychange", () => {
+		if (!document.hidden) refreshOnForeground();
+	});
+	window.addEventListener("pageshow", (event) => {
+		if (event.persisted) refreshOnForeground();
+	});
+	window.addEventListener("focus", refreshOnForeground);
 
 	const installButtons = [byId("install-button"), byId("install-icon-button")].filter(Boolean);
 	const setInstallButtonsHidden = (hidden) => installButtons.forEach((button) => button.classList.toggle("is-hidden", hidden));

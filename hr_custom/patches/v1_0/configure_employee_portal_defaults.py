@@ -11,7 +11,7 @@ def execute():
         "show_settings_tab": 1,
         "location_cache_seconds": 120,
         "fast_location_timeout": 5,
-        "high_accuracy_timeout": 12,
+        "high_accuracy_timeout": 5,
         "notify_salary_slip_submission": 1,
     }
     for fieldname, value in values.items():
