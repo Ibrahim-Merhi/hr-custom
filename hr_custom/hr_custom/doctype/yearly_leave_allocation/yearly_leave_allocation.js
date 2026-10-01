@@ -14,6 +14,7 @@ frappe.ui.form.on("Yearly Leave Allocation", {
     frm.set_value("to_date", `${frm.doc.allocation_year}-12-31`);
   },
   refresh(frm) {
+    enable_employee_grid_search(frm);
     frm.fields_dict.allocations?.grid?.wrapper?.addClass("yla-inline-grid");
     if (frm.doc.docstatus === 0 && !frm.is_new()) {
       frm.add_custom_button(__("Generate Employees"), () => call_action(frm, "generate_employees"), __("Prepare"));
@@ -37,6 +38,30 @@ frappe.ui.form.on("Yearly Leave Allocation", {
     }
   }
 });
+
+function enable_employee_grid_search(frm) {
+  const grid = frm.fields_dict.employees?.grid;
+  if (!grid || grid._employee_search_enabled) return;
+
+  const native_filter = grid.get_data_based_on_fieldtype.bind(grid);
+  grid.get_data_based_on_fieldtype = (df, data, value) => {
+    if (df.fieldname !== "employee") {
+      return native_filter(df, data, value);
+    }
+
+    const formatted_employee = frappe.format(data.employee, df, null, data);
+    const displayed_employee = $("<div>").html(formatted_employee || "").text();
+    const searchable_value = [
+      data.employee,
+      displayed_employee,
+      data.employee_name,
+      data.attendance_device_id,
+    ].filter(Boolean).join(" ").toLowerCase();
+
+    return searchable_value.includes(value) ? data : undefined;
+  };
+  grid._employee_search_enabled = true;
+}
 
 async function call_action(frm, method) {
   if (frm.is_dirty()) await frm.save();
