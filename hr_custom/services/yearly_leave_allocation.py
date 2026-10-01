@@ -248,8 +248,6 @@ def validate_master(doc, strict=False):
         row.employee_name = employee.employee_name
         if employee.company not in allowed_companies:
             errors.append(_("Row {0}: employee company {1} is not selected on this yearly allocation.").format(index, employee.company))
-        if employee.status != "Active":
-            errors.append(_("Row {0}: employee is {1}; inactive employees remain in history but cannot receive a new allocation.").format(index, employee.status))
         unit = leave_types.get(row.leave_type)
         if unit not in ("Days", "Hours"): errors.append(_("Row {0}: leave unit is not configured.").format(index))
         else: row.leave_unit = unit
