@@ -4,7 +4,7 @@ from frappe.model.document import Document
 from frappe.utils import cint, flt
 class HRMobileAttendanceSettings(Document):
     def validate(self):
-        self.fast_location_timeout = cint(self.fast_location_timeout) or 5
+        self.fast_location_timeout = cint(self.fast_location_timeout) or 2
         self.high_accuracy_timeout = cint(self.high_accuracy_timeout) or 5
         if flt(self.default_radius)<=0: frappe.throw(_("Default Radius must be greater than zero."))
         if flt(self.default_max_gps_accuracy)<=0: frappe.throw(_("Default Maximum GPS Accuracy must be greater than zero."))

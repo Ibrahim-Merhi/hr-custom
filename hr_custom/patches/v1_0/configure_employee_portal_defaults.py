@@ -9,8 +9,8 @@ def execute():
         "show_salary_tab": 1,
         "show_profile_tab": 1,
         "show_settings_tab": 1,
-        "location_cache_seconds": 120,
-        "fast_location_timeout": 5,
+        "location_cache_seconds": 60,
+        "fast_location_timeout": 2,
         "high_accuracy_timeout": 5,
         "notify_salary_slip_submission": 1,
     }

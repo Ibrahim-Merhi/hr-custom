@@ -229,7 +229,7 @@ frappe.ready(() => {
 	}
 
 	function locationMaxAge() {
-		return Math.max(30, Number(status?.location_cache_seconds || 120)) * 1000;
+		return Math.max(30, Number(status?.location_cache_seconds || 60)) * 1000;
 	}
 
 	function locationIsFresh() {
@@ -272,8 +272,8 @@ frappe.ready(() => {
 		setText("location", forceAccurate ? __("Getting a precise GPS position…") : __("Getting your recent location…"));
 		locatingPromise = (async () => {
 			try {
-				const cacheSeconds = status?.location_cache_seconds || 120;
-				const fastTimeout = (status?.fast_location_timeout || 5) * 1000;
+				const cacheSeconds = status?.location_cache_seconds || 60;
+				const fastTimeout = (status?.fast_location_timeout || 2) * 1000;
 				const preciseTimeout = Math.min(status?.high_accuracy_timeout || 5, 5) * 1000;
 				if (!forceAccurate) {
 					const preciseRequest = geoPosition({enableHighAccuracy: true, timeout: preciseTimeout, maximumAge: 0})
