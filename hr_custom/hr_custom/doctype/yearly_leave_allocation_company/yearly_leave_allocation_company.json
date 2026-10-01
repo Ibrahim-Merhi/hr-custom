@@ -1,0 +1,11 @@
+{
+ "doctype": "DocType",
+ "name": "Yearly Leave Allocation Company",
+ "module": "HR Custom",
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": ["company"],
+ "fields": [
+  {"fieldname": "company", "label": "Company", "fieldtype": "Link", "options": "Company", "reqd": 1, "in_list_view": 1}
+ ]
+}

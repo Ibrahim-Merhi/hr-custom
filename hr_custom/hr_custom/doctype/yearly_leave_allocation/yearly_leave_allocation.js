@@ -5,6 +5,7 @@ frappe.ui.form.on("Yearly Leave Allocation", {
       .yla-inline-grid .grid-static-col[data-fieldname="allocated_amount"] { cursor: text; }
     `);
     frm.set_query("company", () => ({ filters: { is_group: 0 } }));
+    frm.set_query("company", "companies", () => ({ filters: { is_group: 0 } }));
     if (!frm.doc.company) frm.set_value("company", frappe.defaults.get_user_default("Company"));
   },
   allocation_year(frm) {
@@ -74,7 +75,7 @@ function new_employee_allocation(frm) {
     title: __("New Employee Allocation"),
     fields: [
       { fieldname: "employee", label: __("Employee"), fieldtype: "Link", options: "Employee", reqd: 1,
-        get_query: () => ({ filters: { company: frm.doc.company, status: "Active" } }) },
+        get_query: () => ({ filters: { company: ["in", selected_companies(frm)], status: "Active" } }) },
       { fieldname: "from_date", label: __("Allocation Start Date"), fieldtype: "Date", reqd: 1, default: frappe.datetime.get_today() }
     ],
     primary_action_label: __("Create Draft"),
@@ -90,6 +91,10 @@ function new_employee_allocation(frm) {
     }
   });
   dialog.show();
+}
+
+function selected_companies(frm) {
+  return [...new Set([frm.doc.company, ...(frm.doc.companies || []).map(row => row.company)].filter(Boolean))];
 }
 
 async function preview(frm) {

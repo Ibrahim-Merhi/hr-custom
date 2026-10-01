@@ -7,6 +7,13 @@ from frappe import _
 from frappe.utils import cint, flt, getdate
 
 
+def get_allowed_companies(doc):
+    """Return the primary and additional companies selected on the master."""
+    companies = [doc.company]
+    companies.extend(row.company for row in (doc.get("companies") or []) if row.company)
+    return list(dict.fromkeys(company for company in companies if company))
+
+
 def _conflict(row, master_name=None):
     filters = {"employee": row.employee, "leave_type": row.leave_type, "docstatus": ["<", 2], "from_date": ["<=", row.to_date], "to_date": [">=", row.from_date]}
     names = frappe.get_all("Leave Allocation", filters=filters, pluck="name")
@@ -211,11 +218,26 @@ def enable_hourly_leave_for_failed_rows(name):
 
 def validate_master(doc, strict=False):
     errors, seen = [], set()
+    allowed_companies = get_allowed_companies(doc)
+    additional_companies = [row.company for row in (doc.get("companies") or []) if row.company]
+    if doc.company in additional_companies:
+        errors.append(_("The primary company must not be repeated under Additional Companies."))
+    if len(additional_companies) != len(set(additional_companies)):
+        errors.append(_("Additional Companies must not contain duplicates."))
     if getdate(doc.from_date) > getdate(doc.to_date):
         errors.append(_("From Date must be before To Date."))
     if getdate(doc.from_date).year != cint(doc.allocation_year) or getdate(doc.to_date).year != cint(doc.allocation_year):
         errors.append(_("From Date and To Date must belong to the Allocation Year."))
-    employees = {r.name: r for r in frappe.get_all("Employee", filters={"name": ["in", list({x.employee for x in doc.allocations}) or [""]]}, fields=["name", "company", "status"])}
+    employee_names = {x.employee for x in doc.allocations} | {x.employee for x in doc.employees}
+    employees = {r.name: r for r in frappe.get_all("Employee", filters={"name": ["in", list(employee_names) or [""]]}, fields=["name", "employee_name", "company", "status"])}
+    for employee_row in doc.employees:
+        employee = employees.get(employee_row.employee)
+        if not employee:
+            continue
+        employee_row.employee_status = employee.status
+        employee_row.is_active = employee.status == "Active"
+        if employee.status != "Active":
+            employee_row.exclude_from_allocation = 1
     leave_types = {r.name: r.custom_leave_unit for r in frappe.get_all("Leave Type", filters={"name": ["in", list({x.leave_type for x in doc.allocations}) or [""]]}, fields=["name", "custom_leave_unit"])}
     for index, row in enumerate(doc.allocations, 1):
         key = (row.employee, row.leave_type, str(row.from_date), str(row.to_date))
@@ -223,9 +245,11 @@ def validate_master(doc, strict=False):
         seen.add(key)
         employee = employees.get(row.employee)
         if not employee: errors.append(_("Row {0}: employee does not exist.").format(index)); continue
-        row.employee_name = frappe.db.get_value("Employee", row.employee, "employee_name")
-        if employee.company != doc.company: errors.append(_("Row {0}: employee belongs to another company.").format(index))
-        if employee.status != "Active": errors.append(_("Row {0}: employee is not active.").format(index))
+        row.employee_name = employee.employee_name
+        if employee.company not in allowed_companies:
+            errors.append(_("Row {0}: employee company {1} is not selected on this yearly allocation.").format(index, employee.company))
+        if employee.status != "Active":
+            errors.append(_("Row {0}: employee is {1}; inactive employees remain in history but cannot receive a new allocation.").format(index, employee.status))
         unit = leave_types.get(row.leave_type)
         if unit not in ("Days", "Hours"): errors.append(_("Row {0}: leave unit is not configured.").format(index))
         else: row.leave_unit = unit
@@ -233,8 +257,9 @@ def validate_master(doc, strict=False):
         if getdate(row.from_date) > getdate(row.to_date): errors.append(_("Row {0}: invalid period.").format(index))
         conflict = _conflict(row, doc.name)
         if conflict: errors.append(_("Row {0}: conflicts with Leave Allocation {1}.").format(index, conflict))
-    doc.total_employees = len({r.employee for r in doc.employees if not r.exclude_from_allocation})
-    doc.total_allocations = len([r for r in doc.allocations if flt(r.allocated_amount) > 0])
+    active_employees = {name for name, employee in employees.items() if employee.status == "Active"}
+    doc.total_employees = len({r.employee for r in doc.employees if not r.exclude_from_allocation and r.employee in active_employees})
+    doc.total_allocations = len([r for r in doc.allocations if flt(r.allocated_amount) > 0 and r.employee in active_employees])
     if doc.docstatus == 0 and not errors:
         doc.status = "Ready" if doc.total_allocations else "Draft"
     if strict and errors:
@@ -251,7 +276,19 @@ def generate_standard_allocations(name):
     if doc.docstatus != 1: return
     success = failed = 0
     meta = frappe.get_meta("Leave Allocation")
+    employee_details = {
+        row.name: row
+        for row in frappe.get_all(
+            "Employee",
+            filters={"name": ["in", list({row.employee for row in doc.allocations}) or [""]]},
+            fields=["name", "company", "status"],
+        )
+    }
     for row in doc.allocations:
+        employee = employee_details.get(row.employee)
+        if not employee or employee.status != "Active":
+            frappe.db.set_value(row.doctype, row.name, {"allocation_status": "Skipped", "error_message": _("Employee is not active.")})
+            continue
         if flt(row.allocated_amount) <= 0:
             frappe.db.set_value(row.doctype, row.name, {"allocation_status": "Skipped", "error_message": ""})
             continue
@@ -283,7 +320,7 @@ def generate_standard_allocations(name):
             conflict = _conflict(row, doc.name)
             if conflict: raise frappe.ValidationError(_("Conflicting Leave Allocation {0}").format(conflict))
             values = {"doctype":"Leave Allocation", "employee":row.employee, "leave_type":row.leave_type, "from_date":row.from_date, "to_date":row.to_date, "new_leaves_allocated":row.allocated_amount, "carry_forward":0}
-            if meta.has_field("company"): values["company"] = doc.company
+            if meta.has_field("company"): values["company"] = employee.company
             if meta.has_field("custom_yearly_leave_allocation"): values["custom_yearly_leave_allocation"] = doc.name
             if meta.has_field("custom_yearly_leave_allocation_detail"): values["custom_yearly_leave_allocation_detail"] = row.name
             allocation = frappe.get_doc(values).insert(ignore_permissions=True)
@@ -335,12 +372,14 @@ def import_normalized_csv(content, source_name="Normalized CSV"):
         employee = employee_map.get(code); leave_type = leave_map.get(legacy_type)
         if not employee or not leave_type:
             exceptions.append({"row":number,"legacy_employee_code":code,"leave_type":legacy_type or raw.get("Leave Type"),"amount":raw.get("Allocated Amount"),"reason":_("No Employee found with Attendance Device ID {0}").format(code) if not employee else _("No Leave Type found for legacy code {0}").format(legacy_type)}); continue
+        if employee.status != "Active":
+            exceptions.append({"row":number,"legacy_employee_code":code,"leave_type":legacy_type or raw.get("Leave Type"),"amount":raw.get("Allocated Amount"),"reason":_("Employee is {0}; historical records remain available but inactive employees are not imported into a new yearly allocation.").format(employee.status)}); continue
         start, end = getdate(raw.get("From Date") or raw.get("Period Starting")), getdate(raw.get("To Date") or f"{getdate(raw.get('Period Starting')).year}-12-31")
         key = (employee.company, start.year, start, end)
         if key not in masters:
             masters[key] = frappe.get_doc({"doctype":"Yearly Leave Allocation","company":employee.company,"allocation_year":start.year,"from_date":start,"to_date":end,"description":f"Imported from {source_name}"})
         master = masters[key]
-        if employee.name not in {r.employee for r in master.employees}: master.append("employees", {"employee":employee.name,"employee_name":employee.employee_name,"attendance_device_id":code,"department":employee.department,"branch":employee.branch,"designation":employee.designation,"employment_type":employee.employment_type,"is_active":employee.status == "Active"})
+        if employee.name not in {r.employee for r in master.employees}: master.append("employees", {"employee":employee.name,"employee_name":employee.employee_name,"attendance_device_id":code,"department":employee.department,"branch":employee.branch,"designation":employee.designation,"employment_type":employee.employment_type,"employee_status":employee.status,"is_active":1})
         amount = flt(raw.get("Allocated Amount") or raw.get("Leave Days"))
         existing_allocation = next(
             (
