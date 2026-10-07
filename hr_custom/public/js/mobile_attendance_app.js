@@ -72,6 +72,10 @@ frappe.ready(() => {
 		"Getting a precise GPS position…": "جارٍ تحديد موقع دقيق…", "Accuracy: {0} meters": "دقة الموقع: {0} متر",
 		"GPS requires HTTPS and location support on this device.": "يتطلب تحديد الموقع اتصالاً آمناً ودعم الموقع على هذا الجهاز.",
 		"Location permission was denied. Enable Location for this site in phone Settings.": "تم رفض إذن الموقع. فعّل الموقع لهذا الموقع من إعدادات الهاتف.",
+		"Location permission blocked": "إذن الموقع محظور",
+		"Android: Open this site's settings in your browser, set Location to Allow, and enable precise location. Then return here and retry.": "أندرويد: افتح إعدادات هذا الموقع في المتصفح، واضبط إذن الموقع على سماح، وفعّل الموقع الدقيق. ثم ارجع إلى هنا وحاول مجدداً.",
+		"iPhone/iPad: Open Settings, then Privacy & Security, Location Services. Allow location for the browser or HR Portal and enable Precise Location. Then return here and retry.": "آيفون/آيباد: افتح الإعدادات، ثم الخصوصية والأمان، ثم خدمات الموقع. اسمح بالموقع للمتصفح أو بوابة الموارد البشرية وفعّل الموقع الدقيق. ثم ارجع إلى هنا وحاول مجدداً.",
+		"I changed it — Retry": "غيّرت الإعداد — إعادة المحاولة",
 		"Your location is currently unavailable.": "موقعك غير متاح حالياً.", "The GPS request timed out. Move to an open area and retry.": "انتهت مهلة تحديد الموقع. انتقل إلى مكان مفتوح وحاول مجدداً.",
 		"Getting the required GPS accuracy…": "جارٍ الحصول على دقة الموقع المطلوبة…", "Checking GPS and branch geofence…": "جارٍ التحقق من الموقع ونطاق الفرع…",
 		"VALIDATING…": "جارٍ التحقق…", "Correction submitted": "تم إرسال طلب التصحيح",
@@ -136,6 +140,7 @@ frappe.ready(() => {
 	let coordsCapturedAt = 0;
 	let locationRefreshTimer = null;
 	let locationRetryCount = 0;
+	let lastLocationErrorCode = 0;
 	let lastForegroundRefresh = 0;
 	let busy = false;
 	let status = null;
@@ -251,6 +256,7 @@ frappe.ready(() => {
 	function acceptPosition(position, quiet = false) {
 		coords = position.coords;
 		coordsCapturedAt = Number(position.timestamp) || Date.now();
+		lastLocationErrorCode = 0;
 		setText("location-title", __("Location ready"));
 		setText("location", __("Accuracy: {0} meters", [Math.round(coords.accuracy)]));
 		const accurate = coords.accuracy <= (status?.maximum_gps_accuracy || Infinity);
@@ -296,6 +302,7 @@ frappe.ready(() => {
 				acceptPosition(precise);
 				return precise.coords;
 			} catch (error) {
+				lastLocationErrorCode = Number(error.code || 0);
 				const errors = {1: __("Location permission was denied. Enable Location for this site in phone Settings."), 2: __("Your location is currently unavailable."), 3: __("The GPS request timed out. Move to an open area and retry.")};
 				setText("location-title", __("Location unavailable"));
 				setText("location", errors[error.code] || error.message);
@@ -309,6 +316,38 @@ frappe.ready(() => {
 			} finally { locatingPromise = null; }
 		})();
 		return locatingPromise;
+	}
+
+	async function locationPermissionState() {
+		if (!navigator.permissions?.query) return "unknown";
+		try {
+			return (await navigator.permissions.query({name: "geolocation"})).state;
+		} catch (_) {
+			return "unknown";
+		}
+	}
+
+	async function recoverLocationPermission() {
+		coords = null;
+		coordsCapturedAt = 0;
+		clearTimeout(locationRefreshTimer);
+		if (byId("action")) byId("action").disabled = true;
+		const isApple = /iphone|ipad|ipod/i.test(navigator.userAgent);
+		const message = isApple
+			? __("iPhone/iPad: Open Settings, then Privacy & Security, Location Services. Allow location for the browser or HR Portal and enable Precise Location. Then return here and retry.")
+			: __("Android: Open this site's settings in your browser, set Location to Allow, and enable precise location. Then return here and retry.");
+		const retry = await showAppDialog({
+			title: __("Location permission blocked"),
+			message,
+			icon: "⌖",
+			confirmLabel: __("I changed it — Retry"),
+			showCancel: true,
+			tone: "warning",
+		});
+		if (!retry) return null;
+		locationRetryCount = 0;
+		lastLocationErrorCode = 0;
+		return locate(true);
 	}
 
 	async function refresh(reacquireLocation = false) {
@@ -966,8 +1005,19 @@ frappe.ready(() => {
 			await showAppDialog({title: __("Location not required"), message: __("Your attendance policy allows check-in without GPS."), icon: "⌖"});
 			return;
 		}
-		await locate(true);
-		await showAppDialog({title: byId("location-title").textContent, message: byId("location").textContent, icon: coords ? "✓" : "!"});
+		const permission = await locationPermissionState();
+		let position = null;
+		if (permission === "denied" || lastLocationErrorCode === 1) {
+			position = await recoverLocationPermission();
+		} else {
+			position = await locate(true);
+			if (!position && lastLocationErrorCode === 1) position = await recoverLocationPermission();
+		}
+		if (position) {
+			await showAppDialog({title: byId("location-title").textContent, message: byId("location").textContent, icon: "✓"});
+		} else if (lastLocationErrorCode !== 1) {
+			await showAppDialog({title: byId("location-title").textContent, message: byId("location").textContent, icon: "!"});
+		}
 	};
 	byId("history-card").addEventListener("toggle", (event) => { if (event.target.open) loadHistory(); });
 	byId("filter-attendance").addEventListener("click", loadHistory);
