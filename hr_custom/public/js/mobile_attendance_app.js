@@ -72,10 +72,10 @@ frappe.ready(() => {
 		"Getting a precise GPS position…": "جارٍ تحديد موقع دقيق…", "Accuracy: {0} meters": "دقة الموقع: {0} متر",
 		"GPS requires HTTPS and location support on this device.": "يتطلب تحديد الموقع اتصالاً آمناً ودعم الموقع على هذا الجهاز.",
 		"Location permission was denied. Enable Location for this site in phone Settings.": "تم رفض إذن الموقع. فعّل الموقع لهذا الموقع من إعدادات الهاتف.",
-		"Location permission blocked": "إذن الموقع محظور",
-		"Android: Open this site's settings in your browser, set Location to Allow, and enable precise location. Then return here and retry.": "أندرويد: افتح إعدادات هذا الموقع في المتصفح، واضبط إذن الموقع على سماح، وفعّل الموقع الدقيق. ثم ارجع إلى هنا وحاول مجدداً.",
-		"iPhone/iPad: Open Settings, then Privacy & Security, Location Services. Allow location for the browser or HR Portal and enable Precise Location. Then return here and retry.": "آيفون/آيباد: افتح الإعدادات، ثم الخصوصية والأمان، ثم خدمات الموقع. اسمح بالموقع للمتصفح أو بوابة الموارد البشرية وفعّل الموقع الدقيق. ثم ارجع إلى هنا وحاول مجدداً.",
-		"I changed it — Retry": "غيّرت الإعداد — إعادة المحاولة",
+		"Location access is blocked": "الوصول إلى الموقع محظور",
+		"Android location instructions": "لتفعيل الموقع على أندرويد:\n\n١. إذا كنت تستخدم التطبيق المثبّت: اضغط مطولاً على أيقونة بوابة الموارد البشرية، ثم معلومات التطبيق ← الأذونات ← الموقع.\n\n٢. إذا كنت تستخدم المتصفح: اضغط على رمز إعدادات الموقع بجانب erp.itihad.org، ثم الأذونات ← الموقع.\n\n٣. اختر السماح أثناء الاستخدام وفعّل الموقع الدقيق، ثم ارجع إلى البوابة.",
+		"iPhone location instructions": "لتفعيل الموقع على آيفون أو آيباد:\n\n١. افتح الإعدادات ← الخصوصية والأمان ← خدمات الموقع.\n\n٢. اختر بوابة الموارد البشرية إن ظهرت، وإلا اختر مواقع Safari.\n\n٣. اختر أثناء استخدام التطبيق وفعّل الموقع الدقيق، ثم ارجع إلى البوابة.",
+		"Permission enabled — Try again": "تم تفعيل الإذن — حاول الآن",
 		"Your location is currently unavailable.": "موقعك غير متاح حالياً.", "The GPS request timed out. Move to an open area and retry.": "انتهت مهلة تحديد الموقع. انتقل إلى مكان مفتوح وحاول مجدداً.",
 		"Getting the required GPS accuracy…": "جارٍ الحصول على دقة الموقع المطلوبة…", "Checking GPS and branch geofence…": "جارٍ التحقق من الموقع ونطاق الفرع…",
 		"VALIDATING…": "جارٍ التحقق…", "Correction submitted": "تم إرسال طلب التصحيح",
@@ -334,13 +334,13 @@ frappe.ready(() => {
 		if (byId("action")) byId("action").disabled = true;
 		const isApple = /iphone|ipad|ipod/i.test(navigator.userAgent);
 		const message = isApple
-			? __("iPhone/iPad: Open Settings, then Privacy & Security, Location Services. Allow location for the browser or HR Portal and enable Precise Location. Then return here and retry.")
-			: __("Android: Open this site's settings in your browser, set Location to Allow, and enable precise location. Then return here and retry.");
+			? (isArabic ? __("iPhone location instructions") : "Enable location on iPhone or iPad:\n\n1. Open Settings → Privacy & Security → Location Services.\n\n2. Select HR Portal if listed; otherwise select Safari Websites.\n\n3. Choose While Using the App and enable Precise Location, then return to the portal.")
+			: (isArabic ? __("Android location instructions") : "Enable location on Android:\n\n1. Installed app: press and hold the HR Portal icon, then App info → Permissions → Location.\n\n2. Browser: tap the site controls icon beside erp.itihad.org, then Permissions → Location.\n\n3. Choose Allow while using and enable precise location, then return to the portal.");
 		const retry = await showAppDialog({
-			title: __("Location permission blocked"),
+			title: __("Location access is blocked"),
 			message,
 			icon: "⌖",
-			confirmLabel: __("I changed it — Retry"),
+			confirmLabel: __("Permission enabled — Try again"),
 			showCancel: true,
 			tone: "warning",
 		});
