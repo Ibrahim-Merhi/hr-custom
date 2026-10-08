@@ -75,6 +75,12 @@ class HourlyLeaveApplication(LeaveApplication):
             return
         return super().on_update()
 
+    def notify_leave_approver(self):
+        """The employee portal uses its own workflow notification queue."""
+        if self.flags.get("skip_standard_leave_notification"):
+            return
+        return super().notify_leave_approver()
+
     def on_submit(self):
         if self.is_historical_migration():
             self.create_leave_ledger_entry()

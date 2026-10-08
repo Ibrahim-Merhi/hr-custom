@@ -62,14 +62,17 @@ class TestLeaveApplicationDefaults(unittest.TestCase):
     def test_leave_layout_keeps_reason_in_dates_section(self):
         self.assertLess(PREFERRED_FIELD_ORDER.index("section_break_5"), PREFERRED_FIELD_ORDER.index("description"))
         self.assertLess(PREFERRED_FIELD_ORDER.index("description"), PREFERRED_FIELD_ORDER.index("custom_hourly_leave_section"))
+        left_column = PREFERRED_FIELD_ORDER[
+            PREFERRED_FIELD_ORDER.index("from_date") : PREFERRED_FIELD_ORDER.index("column_break1")
+        ]
+        right_column = PREFERRED_FIELD_ORDER[
+            PREFERRED_FIELD_ORDER.index("column_break1") + 1 : PREFERRED_FIELD_ORDER.index("custom_hourly_leave_section")
+        ]
         self.assertEqual(
-            PREFERRED_FIELD_ORDER[PREFERRED_FIELD_ORDER.index("from_date") + 1],
-            "column_break1",
+            left_column,
+            ["from_date", "half_day", "half_day_date", "total_leave_days"],
         )
-        self.assertEqual(
-            PREFERRED_FIELD_ORDER[PREFERRED_FIELD_ORDER.index("column_break1") + 1],
-            "to_date",
-        )
+        self.assertEqual(right_column, ["to_date", "description"])
 
 
 class TestPendingLeaveWithdrawal(unittest.TestCase):
@@ -128,6 +131,19 @@ class TestPendingLeaveWithdrawal(unittest.TestCase):
                     ),
                     "HR-EMP-00062",
                 )
+
+    def test_leave_notification_is_queued_after_commit(self):
+        doc = frappe._dict(name="HR-LAP-TEST-00001")
+        with patch.object(simple_leave.frappe, "enqueue") as enqueue:
+            simple_leave.enqueue_leave_workflow_notification(doc)
+
+        enqueue.assert_called_once_with(
+            "hr_custom.services.simple_leave.notify_leave_workflow_by_name",
+            queue="short",
+            enqueue_after_commit=True,
+            job_id="leave-workflow-notify-HR-LAP-TEST-00001",
+            leave_name="HR-LAP-TEST-00001",
+        )
 
 
 if __name__ == "__main__":

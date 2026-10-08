@@ -96,6 +96,23 @@ def notify_current_reviewer(doc):
             _notify(user, doc, _("Attendance correction {0} is waiting for final HR approval.").format(doc.name))
 
 
+def enqueue_reviewer_notification(doc):
+    """Notify reviewers after commit without delaying the employee response."""
+    frappe.enqueue(
+        "hr_custom.services.attendance_correction.notify_current_reviewer_by_name",
+        queue="short",
+        enqueue_after_commit=True,
+        job_id=f"attendance-correction-notify-{doc.name}",
+        request_name=doc.name,
+    )
+
+
+def notify_current_reviewer_by_name(request_name):
+    if not frappe.db.exists("Attendance Correction Request", request_name):
+        return
+    notify_current_reviewer(frappe.get_doc("Attendance Correction Request", request_name))
+
+
 def get_correction_context(doc):
     user = get_effective_approval_user()
     is_hr = _is_hr_manager()

@@ -13,9 +13,9 @@ class AttendanceCorrectionRequest(Document):
         initialize_correction_approval(self)
 
     def after_insert(self):
-        from hr_custom.services.attendance_correction import notify_current_reviewer
+        from hr_custom.services.attendance_correction import enqueue_reviewer_notification
 
-        notify_current_reviewer(self)
+        enqueue_reviewer_notification(self)
 
     def validate(self):
         roles = set(frappe.get_roles())

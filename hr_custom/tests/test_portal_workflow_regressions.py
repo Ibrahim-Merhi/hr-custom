@@ -84,6 +84,29 @@ class TestAttendanceCorrectionAdjustments(unittest.TestCase):
 
 
 class TestAttendanceCorrectionRouting(unittest.TestCase):
+    def test_new_request_notification_is_queued_after_commit(self):
+        doc = frappe._dict(name="ACR-TEST-00001")
+        with patch.object(attendance_correction.frappe, "enqueue") as enqueue:
+            attendance_correction.enqueue_reviewer_notification(doc)
+
+        enqueue.assert_called_once_with(
+            "hr_custom.services.attendance_correction.notify_current_reviewer_by_name",
+            queue="short",
+            enqueue_after_commit=True,
+            job_id="attendance-correction-notify-ACR-TEST-00001",
+            request_name="ACR-TEST-00001",
+        )
+
+    def test_missing_request_notification_job_exits_cleanly(self):
+        database = SimpleNamespace(exists=lambda *args, **kwargs: False)
+        with (
+            patch.object(attendance_correction.frappe, "db", database),
+            patch.object(attendance_correction.frappe, "get_doc") as get_doc,
+        ):
+            attendance_correction.notify_current_reviewer_by_name("ACR-MISSING")
+
+        get_doc.assert_not_called()
+
     def test_direct_hr_request_does_not_share_with_employee_approvers(self):
         doc = frappe._dict(
             name="ACR-TEST-00001",

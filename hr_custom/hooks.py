@@ -36,7 +36,7 @@ doc_events={
     "Leave Application":{
         "before_validate":"hr_custom.services.simple_leave.populate_leave_application_defaults",
         "before_insert":"hr_custom.services.simple_leave.initialize_leave_approval",
-        "after_insert":"hr_custom.services.simple_leave.notify_leave_workflow",
+        "after_insert":"hr_custom.services.simple_leave.enqueue_leave_workflow_notification",
     },
 }
 # HRMS owns auto-attendance. This scheduler only creates custom exception alerts.

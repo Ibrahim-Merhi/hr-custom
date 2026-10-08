@@ -202,8 +202,9 @@ def update_pending_leave(
 
     with run_portal_document_as_system_user():
         doc.flags.ignore_permissions = True
+        doc.flags.skip_standard_leave_notification = True
         doc.save()
-        notify_leave_workflow(doc)
+        enqueue_leave_workflow_notification(doc)
     return {
         "name": doc.name,
         "leave_type": leave_type,
@@ -308,6 +309,23 @@ def notify_leave_workflow(doc, method=None):
             "approver-1",
             _("Leave request {0} is waiting for your approval.").format(doc.name),
         )
+
+
+def enqueue_leave_workflow_notification(doc, method=None):
+    """Share and notify after commit so portal requests return promptly."""
+    frappe.enqueue(
+        "hr_custom.services.simple_leave.notify_leave_workflow_by_name",
+        queue="short",
+        enqueue_after_commit=True,
+        job_id=f"leave-workflow-notify-{doc.name}",
+        leave_name=doc.name,
+    )
+
+
+def notify_leave_workflow_by_name(leave_name):
+    if not frappe.db.exists("Leave Application", leave_name):
+        return
+    notify_leave_workflow(frappe.get_doc("Leave Application", leave_name))
 
 
 def _notify_next_reviewer(doc):
@@ -540,5 +558,6 @@ def submit_simple_leave(from_date, to_date, reason, leave_unit="Days", leave_dur
     # execute only the insert lifecycle as Administrator because portal::...
     # identities intentionally do not have User records.
     with run_portal_document_as_system_user():
+        application.flags.skip_standard_leave_notification = True
         application.insert(ignore_permissions=True, ignore_links=True)
     return {"name": application.name, "leave_type": leave_type, "leave_unit": unit, "leave_days": preview.get("leave_days"), "leave_hours": preview.get("total_leave_hours"), "half_day": is_half_day, "return_to_work_date": preview["return_to_work_date"], "approver": approvers[0], "approver_count": len(approvers), "status": application.status}

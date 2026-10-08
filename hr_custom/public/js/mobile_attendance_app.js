@@ -57,6 +57,8 @@ frappe.ready(() => {
 		"No active leave allocations found.": "لا توجد أرصدة إجازات فعّالة.", "No leave requests found.": "لا توجد طلبات إجازة.",
 		"No available leave allocation": "لا يوجد رصيد إجازة متاح", "Send Leave Request": "إرسال طلب الإجازة",
 		"Sending…": "جارٍ الإرسال…", "Selecting your leave allocation and approver…": "جارٍ تحديد رصيد الإجازة والمعتمد…",
+		"Leave request sent": "تم إرسال طلب الإجازة", "Leave request updated": "تم تحديث طلب الإجازة",
+		"Leave request withdrawn": "تم سحب طلب الإجازة", "Your pending leave request was withdrawn.": "تم سحب طلب الإجازة المعلّق.",
 		"calendar day(s)": "أيام تقويمية", "holiday/non-working day(s) excluded": "أيام عطل أو أيام غير عاملة مستثناة",
 		"No notifications in this category.": "لا توجد إشعارات في هذه الفئة.", "Delete notification?": "حذف الإشعار؟",
 		"This notification will be removed permanently.": "سيتم حذف هذا الإشعار نهائياً.", "Could not update notification": "تعذر تحديث الإشعار",
@@ -79,6 +81,7 @@ frappe.ready(() => {
 		"Your location is currently unavailable.": "موقعك غير متاح حالياً.", "The GPS request timed out. Move to an open area and retry.": "انتهت مهلة تحديد الموقع. انتقل إلى مكان مفتوح وحاول مجدداً.",
 		"Getting the required GPS accuracy…": "جارٍ الحصول على دقة الموقع المطلوبة…", "Checking GPS and branch geofence…": "جارٍ التحقق من الموقع ونطاق الفرع…",
 		"VALIDATING…": "جارٍ التحقق…", "Correction submitted": "تم إرسال طلب التصحيح",
+		"Sending request…": "جارٍ إرسال الطلب…", "Your request was sent to HR.": "تم إرسال طلبك إلى الموارد البشرية.",
 		"Refreshing…": "جارٍ التحديث…", "Updated": "تم التحديث", "Refresh": "تحديث",
 		"Outside the allowed work location": "أنت خارج نطاق العمل المسموح",
 		"You are currently about {0} from {1}.\n\nTo record attendance, move within {2} of this branch, then try again.": "أنت حالياً على بعد حوالي {0} من {1}.\n\nلتسجيل الحضور، اقترب لمسافة {2} من هذا الفرع ثم حاول مجدداً.",
@@ -168,7 +171,7 @@ frappe.ready(() => {
 	function api(method, args = {}) {
 		const action = method.split(".").pop();
 		return new Promise((resolve, reject) => frappe.call({
-			method, args, type: /^(submit|mark|archive|delete|process|set|withdraw)_/.test(action) ? "POST" : "GET", silent: true,
+			method, args, type: /^(submit|update|mark|archive|delete|process|set|withdraw)_/.test(action) ? "POST" : "GET", silent: true,
 			callback: (response) => resolve(response.message),
 			error: (response) => {
 				let text = __("Request failed.");
@@ -408,6 +411,7 @@ frappe.ready(() => {
 	function openCorrectionForm() {
 		closeSheet(byId("attendance-detail-sheet"));
 		byId("correction-form").reset();
+		setText("correction-message", "");
 		byId("correction-date").value = currentAttendanceDate;
 		byId("correction-in").value = `${currentAttendanceDate}T09:00`;
 		byId("correction-out").value = `${currentAttendanceDate}T18:00`;
@@ -418,16 +422,22 @@ frappe.ready(() => {
 	async function submitCorrection(event) {
 		event.preventDefault();
 		const button = byId("submit-correction");
+		const originalLabel = button.textContent;
 		button.disabled = true;
+		button.textContent = __("Sending request…");
+		setText("correction-message", __("Sending request…"));
 		try {
 			const type = byId("correction-type").value;
-			await api("hr_custom.api.attendance_correction_workflow.submit_attendance_correction", {attendance_date: byId("correction-date").value, request_type: type, reason: byId("correction-reason").value, requested_check_in_time: ["Missing Check In", "Wrong Check In"].includes(type) ? byId("correction-in").value : null, requested_check_out_time: ["Missing Check Out", "Wrong Check Out"].includes(type) ? byId("correction-out").value : null});
+			const result = await api("hr_custom.api.attendance_correction_workflow.submit_attendance_correction", {attendance_date: byId("correction-date").value, request_type: type, reason: byId("correction-reason").value, requested_check_in_time: ["Missing Check In", "Wrong Check In"].includes(type) ? byId("correction-in").value : null, requested_check_out_time: ["Missing Check Out", "Wrong Check Out"].includes(type) ? byId("correction-out").value : null});
 			closeSheet(byId("correction-sheet"));
 			historyLoaded = false; loadedSections.delete("approvals");
-			await loadHistory();
-			await showAppDialog({title: __("Correction submitted"), message: __("Your request was sent to the attendance approver."), icon: "✓"});
+			const message = result?.approval_stage === "Pending HR Approval"
+				? __("Your request was sent to HR.")
+				: __("Your request was sent to the attendance approver.");
+			showAppDialog({title: __("Correction submitted"), message, icon: "✓"});
+			loadHistory().catch(() => {});
 		} catch (error) { setText("correction-message", error.message); }
-		finally { button.disabled = false; }
+		finally { button.disabled = false; button.textContent = originalLabel; }
 	}
 
 	function formatNumber(value) { return Number(value || 0).toLocaleString(isArabic ? "ar-LB" : undefined, {maximumFractionDigits: 2}); }
@@ -832,6 +842,7 @@ frappe.ready(() => {
 	}
 
 	let leavePreviewTimer = null;
+	let leavePreviewSequence = 0;
 	async function loadAvailableLeaveTypes() {
 		const select = byId("leave-type"), previous = select.value;
 		const requirements = byId("leave-requirements");
@@ -852,24 +863,34 @@ frappe.ready(() => {
 		byId("leave-unit").value = option?.dataset.unit || "Days";
 		updateHourlyFields();
 	}
-	async function previewLeave() {
+	async function previewLeave(previewSequence = ++leavePreviewSequence) {
 		const fromDate = byId("leave-from-date").value;
 		const toDate = byId("leave-to-date").value;
 		if (!fromDate || !toDate || toDate < fromDate) return;
+		const leaveType = byId("leave-type").value;
+		const leaveDuration = byId("leave-duration").value;
+		const partialHours = byId("leave-partial-hours").value;
+		const halfDay = byId("leave-half-day").checked ? 1 : 0;
 		try {
-			if (!byId("leave-type").value) return;
-			const result = await api("hr_custom.services.simple_leave.preview_simple_leave", {from_date: fromDate, to_date: toDate, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value, half_day: byId("leave-half-day").checked ? 1 : 0});
+			if (!leaveType) return;
+			const result = await api("hr_custom.services.simple_leave.preview_simple_leave", {from_date: fromDate, to_date: toDate, leave_type: leaveType, leave_duration: leaveDuration, partial_hours: partialHours, half_day: halfDay});
+			if (previewSequence !== leavePreviewSequence) return;
 			byId("leave-preview").classList.remove("is-hidden");
 			setText("leave-preview-amount", result.leave_unit === "Hours" ? __("{0} hours", [result.total_leave_hours]) : __("{0} days", [result.leave_days]));
 			setText("leave-preview-return", portalDate(result.return_to_work_date, {day: "numeric", month: "long", year: "numeric"}));
 			setText("leave-preview-note", __("{0} calendar day(s), {1} holiday/non-working day(s) excluded · {2}", [formatNumber(result.calendar_days), formatNumber(result.excluded_days), __(result.leave_type)]));
 			byId("leave-message").textContent = "";
 		} catch (error) {
+			if (previewSequence !== leavePreviewSequence) return;
 			byId("leave-preview").classList.add("is-hidden");
 			const message = byId("leave-message"); message.className = "feedback error"; message.textContent = error.message;
 		}
 	}
-	function scheduleLeavePreview() { clearTimeout(leavePreviewTimer); leavePreviewTimer = setTimeout(previewLeave, 250); }
+	function scheduleLeavePreview() {
+		clearTimeout(leavePreviewTimer);
+		const previewSequence = ++leavePreviewSequence;
+		leavePreviewTimer = setTimeout(() => previewLeave(previewSequence), 250);
+	}
 	function updateHourlyFields() {
 		const hourly = byId("leave-unit").value === "Hours";
 		byId("half-day-field").classList.toggle("is-hidden", hourly);
@@ -898,15 +919,15 @@ frappe.ready(() => {
 				new Promise((_, reject) => setTimeout(() => reject(new Error(__("The leave request timed out. Please try again."))), 20000)),
 			]);
 			if (submissionSequence !== leaveSubmissionSequence) return;
-			message.className = "feedback success";
 			const amount = result.leave_unit === "Hours" ? __("{0} hours", [result.leave_hours]) : __("{0} days", [result.leave_days]);
-			message.textContent = result.updated
+			const successMessage = result.updated
 				? __("Leave request updated and returned to the first approver.")
 				: __("Leave request {0} for {1} sent to {2} approver(s). Return to work: {3}.", [result.name, amount, formatNumber(result.approver_count), portalDate(result.return_to_work_date, {day: "numeric", month: "long", year: "numeric"})]);
 			byId("simple-leave-form").reset();
+			closeLeaveRequest();
 			loadedSections.delete("leaves");
-			await loadLeaves(true);
-			setTimeout(closeLeaveRequest, 1600);
+			showAppDialog({title: result.updated ? __("Leave request updated") : __("Leave request sent"), message: successMessage, icon: "✓"});
+			loadLeaves(true).catch(() => {});
 		} catch (error) {
 			if (submissionSequence !== leaveSubmissionSequence) return;
 			message.className = "feedback error";
@@ -1040,8 +1061,9 @@ frappe.ready(() => {
 			closeSheet(byId("leave-detail-sheet"));
 			currentLeaveDetail = null;
 			loadedSections.delete("leaves"); loadedSections.delete("approvals");
-			await loadLeaves(true);
-			loadNotifications();
+			showAppDialog({title: __("Leave request withdrawn"), message: __("Your pending leave request was withdrawn."), icon: "✓"});
+			loadLeaves(true).catch(() => {});
+			loadNotifications().catch(() => {});
 		} catch (error) {
 			await showAppDialog({title: __("Could not withdraw leave request"), message: error.message, icon: "!"});
 		} finally { button.disabled = false; }
