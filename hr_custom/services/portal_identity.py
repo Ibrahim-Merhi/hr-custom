@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 
 import frappe
 from frappe import _
@@ -119,3 +120,27 @@ def get_effective_approval_user(user=None):
 	if not credential:
 		return user or frappe.session.user
 	return frappe.db.get_value("Employee", credential.employee, "user_id") or f"{PORTAL_USER_PREFIX}{credential.name}"
+
+
+@contextmanager
+def run_portal_document_as_system_user():
+	"""Run standard DocType lifecycle code without exposing a fake portal User.
+
+	Portal authentication deliberately uses a virtual identity rather than a
+	Frappe User record. Some standard ERPNext/HRMS controllers load the current
+	User while validating a document. The calling endpoint must authenticate and
+	bind the employee before entering this narrowly scoped context.
+	"""
+	original_user = frappe.session.user
+	if not str(original_user).startswith(PORTAL_USER_PREFIX):
+		yield
+		return
+
+	form_dict = frappe.local.form_dict
+	try:
+		frappe.set_user("Administrator")
+		frappe.local.form_dict = form_dict
+		yield
+	finally:
+		frappe.set_user(original_user)
+		frappe.local.form_dict = form_dict

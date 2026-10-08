@@ -65,3 +65,17 @@ def on_leave_today(filters=None):
         "from_date": ["<=", today], "to_date": [">=", today],
     })
     return _result(value, ["List", "Leave Application"], {"company": COMPANY, "status": "Approved", "from_date": ["<=", today], "to_date": [">=", today]})
+
+
+@frappe.whitelist()
+def pending_attendance_corrections(filters=None):
+    stages = ["Pending Approver Approval", "Pending HR Approval"]
+    value = frappe.db.count(
+        "Attendance Correction Request",
+        {"approval_stage": ["in", stages], "docstatus": ["<", 2]},
+    )
+    return _result(
+        value,
+        ["List", "Attendance Correction Request"],
+        {"approval_stage": ["in", stages], "docstatus": ["<", 2]},
+    )

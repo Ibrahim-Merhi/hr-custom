@@ -30,10 +30,11 @@ doc_events={
     "Employee Checkin":{"after_insert":"hr_custom.services.portal_attendance_processing.finalize_checkin_pair"},
     "Branch":{"validate":"hr_custom.attendance.validation.validate_branch"},
     "Employment Type":{"validate":"hr_custom.services.work_schedule.validate_schedule_document"},
-    "Employee":{"validate":["hr_custom.services.work_schedule.validate_schedule_document", "hr_custom.services.employee_name.apply_bilingual_name", "hr_custom.services.simple_leave.validate_employee_leave_setup"]},
+    "Employee":{"validate":["hr_custom.services.work_schedule.validate_schedule_document", "hr_custom.services.employee_name.apply_bilingual_name", "hr_custom.services.simple_leave.validate_employee_leave_setup", "hr_custom.services.employee_security.validate_location_bypass_permission"]},
     "Weekly Work Schedule":{"validate":"hr_custom.services.work_schedule.validate_schedule_document"},
     "Salary Slip":{"on_submit":"hr_custom.services.portal_notifications.notify_salary_slip_available"},
     "Leave Application":{
+        "before_validate":"hr_custom.services.simple_leave.populate_leave_application_defaults",
         "before_insert":"hr_custom.services.simple_leave.initialize_leave_approval",
         "after_insert":"hr_custom.services.simple_leave.notify_leave_workflow",
     },

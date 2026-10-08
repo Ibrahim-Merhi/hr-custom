@@ -30,6 +30,10 @@ frappe.ui.form.on("Employment Type", {
 
 frappe.ui.form.on("Employee", {
 	refresh(frm) {
+		const can_manage_location_bypass =
+			frappe.session.user === "Administrator" || frappe.user.has_role("System Manager");
+		frm.toggle_display("custom_location_not_required", can_manage_location_bypass);
+
 		if (frm.doc.custom_use_custom_work_schedule) {
 			frm.add_custom_button(__("Complete Weekly Schedule"), () => add_missing_schedule_days(frm));
 		}

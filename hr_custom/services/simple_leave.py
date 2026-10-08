@@ -57,6 +57,70 @@ def get_employee_approvers(employee):
     return [standard_employee] if standard_employee else []
 
 
+def get_employee_primary_company(employee):
+    """Use the first Company Details row, falling back to Employee.company."""
+    company = None
+    if frappe.db.exists("DocType", "Employee Branch Assignment"):
+        company = frappe.db.get_value(
+            "Employee Branch Assignment",
+            {"parent": employee, "parenttype": "Employee", "parentfield": "custom_branches"},
+            "company",
+            order_by="idx asc",
+        )
+    return company or frappe.db.get_value("Employee", employee, "company")
+
+
+def get_standard_leave_approver(employee):
+    """Return the User required by HRMS while our workflow stores Employees."""
+    for approver_employee in get_employee_approvers(employee):
+        user = frappe.db.get_value("Employee", approver_employee, "user_id")
+        if user and frappe.db.get_value("User", user, "enabled"):
+            return user
+
+    employee_values = frappe.db.get_value(
+        "Employee", employee, ["leave_approver", "department"], as_dict=True
+    ) or frappe._dict()
+    if employee_values.leave_approver:
+        return employee_values.leave_approver
+    if employee_values.department:
+        department_approver = frappe.db.get_value(
+            "Department Approver",
+            {"parent": employee_values.department, "parentfield": "leave_approvers", "idx": 1},
+            "approver",
+        )
+        if department_approver:
+            return department_approver
+
+    return next(
+        (
+            user
+            for user in _hr_managers()
+            if user != "Administrator" and frappe.db.get_value("User", user, "enabled")
+        ),
+        None,
+    ) or "Administrator"
+
+
+@frappe.whitelist()
+def get_leave_application_employee_defaults(employee):
+    if not employee or not frappe.db.exists("Employee", employee):
+        frappe.throw(_("Please select a valid Employee."))
+    return {
+        "company": get_employee_primary_company(employee),
+        "leave_approver": get_standard_leave_approver(employee),
+    }
+
+
+def populate_leave_application_defaults(doc, method=None):
+    if doc.doctype != "Leave Application" or not doc.employee:
+        return
+    if not (doc.is_new() or doc.has_value_changed("employee") or not doc.company or not doc.leave_approver):
+        return
+    defaults = get_leave_application_employee_defaults(doc.employee)
+    doc.company = defaults["company"]
+    doc.leave_approver = defaults["leave_approver"]
+
+
 def initialize_leave_approval(doc, method=None):
     """Build an immutable, ordered approval route from the Employee setup."""
     if doc.doctype != "Leave Application" or doc.get("custom_approval_steps"):
@@ -334,6 +398,8 @@ def preview_simple_leave(from_date, to_date, leave_unit="Days", leave_duration=N
 @frappe.whitelist(methods=["POST"])
 def submit_simple_leave(from_date, to_date, reason, leave_unit="Days", leave_duration=None, partial_hours=None, leave_type=None, half_day=0):
     from hr_custom.api.mobile_attendance import _employee_for_user
+    from hr_custom.services.portal_identity import run_portal_document_as_system_user
+
     employee = _employee_for_user()
     from_date, to_date = getdate(from_date), getdate(to_date)
     reason = (reason or "").strip()
@@ -349,8 +415,13 @@ def submit_simple_leave(from_date, to_date, reason, leave_unit="Days", leave_dur
     unit = get_leave_unit(leave_type)
     preview = calculate_leave_calendar(employee.name, leave_type, from_date, to_date, leave_duration, partial_hours, half_day)
     is_half_day = cint(half_day) if unit == "Days" else 0
-    application = frappe.get_doc({"doctype": "Leave Application", "employee": employee.name, "leave_type": leave_type, "from_date": from_date, "to_date": to_date, "half_day": is_half_day, "half_day_date": from_date if is_half_day else None, "posting_date": nowdate(), "description": reason, "leave_approver": approvers[0], "status": "Open", "custom_leave_duration": leave_duration, "custom_partial_hours": partial_hours})
+    defaults = get_leave_application_employee_defaults(employee.name)
+    application = frappe.get_doc({"doctype": "Leave Application", "employee": employee.name, "company": defaults["company"], "leave_type": leave_type, "from_date": from_date, "to_date": to_date, "half_day": is_half_day, "half_day_date": from_date if is_half_day else None, "posting_date": nowdate(), "description": reason, "leave_approver": defaults["leave_approver"], "status": "Open", "custom_leave_duration": leave_duration, "custom_partial_hours": partial_hours})
     # This endpoint already binds the application to the authenticated employee.
-    # Controlled insertion avoids ESS Company link permissions blocking a valid request.
-    application.insert(ignore_permissions=True, ignore_links=True)
+    # Controlled insertion avoids ESS Company link permissions blocking a valid
+    # request. Standard HRMS validation sometimes loads frappe.session.user;
+    # execute only the insert lifecycle as Administrator because portal::...
+    # identities intentionally do not have User records.
+    with run_portal_document_as_system_user():
+        application.insert(ignore_permissions=True, ignore_links=True)
     return {"name": application.name, "leave_type": leave_type, "leave_unit": unit, "leave_days": preview.get("leave_days"), "leave_hours": preview.get("total_leave_hours"), "half_day": is_half_day, "return_to_work_date": preview["return_to_work_date"], "approver": approvers[0], "approver_count": len(approvers), "status": application.status}

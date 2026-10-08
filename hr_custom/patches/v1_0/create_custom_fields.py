@@ -59,7 +59,7 @@ FIELDS = {
         dict(fieldname="custom_hour_balance_before", label="Available Hour Balance", fieldtype="Float", precision=2, read_only=1, insert_after="custom_leave_hours", depends_on="eval:doc.custom_leave_unit == 'Hours'"),
         dict(fieldname="custom_hour_balance_after", label="Balance After Leave", fieldtype="Float", precision=2, read_only=1, insert_after="custom_hour_balance_before", depends_on="eval:doc.custom_leave_unit == 'Hours'"),
         dict(fieldname="custom_leave_hour_details", label="Leave Hours Breakdown", fieldtype="Table", options="Leave Hour Detail", read_only=1, insert_after="custom_hour_balance_after", depends_on="eval:doc.custom_leave_unit == 'Hours'"),
-        dict(fieldname="custom_legacy_leave_section", label="Legacy Leave Information", fieldtype="Section Break", collapsible=1, insert_after="custom_leave_hour_details"),
+        dict(fieldname="custom_legacy_leave_section", label="Legacy Leave Information", fieldtype="Section Break", collapsible=1, hidden=1, insert_after="custom_approval_steps"),
         dict(fieldname="custom_return_to_work_date", label="Return to Work Date", fieldtype="Date", insert_after="custom_legacy_leave_section"),
         dict(fieldname="custom_legacy_voucher_number", label="Legacy Voucher Number", fieldtype="Data", insert_after="custom_return_to_work_date"),
         dict(fieldname="custom_legacy_balance_deducted", label="Legacy Balance Deducted", fieldtype="Float", precision=2, insert_after="custom_legacy_voucher_number"),

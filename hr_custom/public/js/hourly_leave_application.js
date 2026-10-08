@@ -1,5 +1,7 @@
 frappe.ui.form.on("Leave Application", {
 	refresh(frm) {
+		apply_leave_form_ui(frm);
+		if (frm.is_new() && frm.doc.employee) apply_employee_defaults(frm);
 		set_hourly_visibility(frm);
 		if (is_migrated_record(frm)) {
 			setup_leave_approval_actions(frm);
@@ -8,7 +10,10 @@ frappe.ui.form.on("Leave Application", {
 		if (frm.doc.leave_type) refresh_leave_unit(frm);
 		setup_leave_approval_actions(frm);
 	},
-	employee: schedule_hourly_preview,
+	employee(frm) {
+		apply_employee_defaults(frm);
+		schedule_hourly_preview(frm);
+	},
 	leave_type(frm) {
 		if (is_migrated_record(frm)) {
 			set_hourly_visibility(frm);
@@ -21,6 +26,26 @@ frappe.ui.form.on("Leave Application", {
 	custom_leave_duration: schedule_hourly_preview,
 	custom_partial_hours: schedule_hourly_preview,
 });
+
+function apply_leave_form_ui(frm) {
+	frm.toggle_display("custom_legacy_leave_section", false);
+	frm.toggle_display("sb_other_details", false);
+	frm.set_df_property("company", "read_only", 1);
+	frm.set_df_property("leave_approver", "read_only", 1);
+}
+
+function apply_employee_defaults(frm) {
+	if (!frm.doc.employee || frm.doc.docstatus !== 0) return;
+	frappe.call({
+		method: "hr_custom.services.simple_leave.get_leave_application_employee_defaults",
+		args: {employee: frm.doc.employee},
+		callback(response) {
+			const defaults = response.message || {};
+			if (defaults.company) frm.set_value("company", defaults.company);
+			if (defaults.leave_approver) frm.set_value("leave_approver", defaults.leave_approver);
+		},
+	});
+}
 
 function is_migrated_record(frm) {
 	return Number(frm.doc.custom_is_migrated_record || 0) === 1;

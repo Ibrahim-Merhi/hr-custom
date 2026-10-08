@@ -55,9 +55,21 @@ def get_correction_approval_queue():
 
 
 @frappe.whitelist(methods=["POST"])
-def process_correction_approval(name, action, remarks=None):
+def process_correction_approval(
+    name,
+    action,
+    remarks=None,
+    requested_check_in_time=None,
+    requested_check_out_time=None,
+):
     _, service, _ = _modules()
-    return service.process_correction_approval(name, action, remarks)
+    return service.process_correction_approval(
+        name,
+        action,
+        remarks,
+        requested_check_in_time,
+        requested_check_out_time,
+    )
 
 
 @frappe.whitelist(methods=["POST"])

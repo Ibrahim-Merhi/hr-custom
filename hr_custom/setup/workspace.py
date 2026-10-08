@@ -42,6 +42,7 @@ CUSTOM_CARD_METHODS = {
     "HR Present Today": "hr_custom.services.workspace_cards.present_today",
     "HR Absent Today": "hr_custom.services.workspace_cards.absent_today",
     "HR On Leave Today": "hr_custom.services.workspace_cards.on_leave_today",
+    "HR Pending Attendance Corrections": "hr_custom.services.workspace_cards.pending_attendance_corrections",
 }
 
 MANAGER_NUMBER_CARDS = (
@@ -52,6 +53,7 @@ MANAGER_NUMBER_CARDS = (
     ("HR New Employees This Month", "New Employees This Month", "Employee", [["custom_is_payroll_identity", "=", 0]], [["date_of_joining", ">=", "frappe.datetime.month_start()"], ["date_of_joining", "<=", "frappe.datetime.month_end()"]]),
     ("HR Employees Leaving Soon", "Employees Leaving Soon", "Employee", [["status", "=", "Active"], ["custom_is_payroll_identity", "=", 0]], [["relieving_date", ">=", "frappe.datetime.get_today()"], ["relieving_date", "<=", "frappe.datetime.add_days(frappe.datetime.get_today(), 30)"]]),
     ("HR Pending Leave Applications", "Pending Leave Applications", "Leave Application", [["status", "=", "Open"], ["docstatus", "=", 0]], []),
+    ("HR Pending Attendance Corrections", "Pending Attendance Corrections", "Attendance Correction Request", [], []),
     ("HR Pending Expense Claims", "Pending Expense Claims", "Expense Claim", [["approval_status", "=", "Draft"], ["docstatus", "=", 0]], []),
 )
 

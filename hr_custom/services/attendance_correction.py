@@ -1,9 +1,14 @@
 import frappe
 from frappe import _
 from frappe.share import add_docshare
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, getdate, now_datetime
 
-from hr_custom.services.simple_leave import _hr_managers, _is_hr_manager, get_employee_approvers
+from hr_custom.services.simple_leave import (
+    _approver_delivery_user,
+    _hr_managers,
+    _is_hr_manager,
+    get_employee_approvers,
+)
 from hr_custom.services.portal_identity import get_effective_approval_user
 
 
@@ -49,6 +54,10 @@ def ensure_direct_hr_routing_event():
 def _notify(user, doc, message):
     if not user:
         return
+    if frappe.db.exists("Employee", user):
+        user = _approver_delivery_user(user)
+    if not user:
+        return
     notification = frappe.new_doc("PWA Notification")
     notification.from_user = "Administrator" if str(frappe.session.user).startswith("portal::") else frappe.session.user
     notification.to_user = user
@@ -60,6 +69,11 @@ def _notify(user, doc, message):
 
 def _share_with_reviewer(doc, user):
     """Grant workflow access without requiring the employee to share records."""
+    if frappe.db.exists("Employee", user):
+        user = frappe.db.get_value("Employee", user, "user_id")
+    # Portal-only approvers use the scoped API and are not Frappe User records.
+    if not user or not frappe.db.exists("User", user):
+        return
     add_docshare(
         doc.doctype,
         doc.name,
@@ -73,9 +87,9 @@ def _share_with_reviewer(doc, user):
 
 
 def notify_current_reviewer(doc):
-    for approver in get_employee_approvers(doc.employee):
-        _share_with_reviewer(doc, approver)
     if doc.approval_stage == "Pending Approver Approval":
+        for approver in get_employee_approvers(doc.employee):
+            _share_with_reviewer(doc, approver)
         _notify(doc.current_approver, doc, _("Attendance correction {0} is waiting for your approval.").format(doc.name))
     elif doc.approval_stage == "Pending HR Approval":
         for user in _hr_managers():
@@ -94,8 +108,36 @@ def get_correction_context(doc):
     }
 
 
+def _apply_hr_adjustments(doc, requested_check_in_time=None, requested_check_out_time=None):
+    """Apply HR's reviewed values before final approval.
+
+    Saving the request records the original and adjusted values in the DocType
+    version history because Attendance Correction Request tracks changes.
+    """
+    if not _is_hr_manager():
+        frappe.throw(_("Only HR can adjust the requested attendance values."), frappe.PermissionError)
+
+    values = {
+        "requested_check_in_time": requested_check_in_time,
+        "requested_check_out_time": requested_check_out_time,
+    }
+    for fieldname, value in values.items():
+        if value in (None, ""):
+            continue
+        value = get_datetime(value)
+        if getdate(value) != getdate(doc.attendance_date):
+            frappe.throw(_("Adjusted check-in and check-out must be on the attendance date."))
+        doc.set(fieldname, value)
+
+
 @frappe.whitelist(methods=["POST"])
-def process_correction_approval(name, action, remarks=None):
+def process_correction_approval(
+    name,
+    action,
+    remarks=None,
+    requested_check_in_time=None,
+    requested_check_out_time=None,
+):
     if action not in ("approve", "reject"):
         frappe.throw(_("Invalid approval action."))
     frappe.db.sql("select name from `tabAttendance Correction Request` where name=%s for update", name)
@@ -114,6 +156,11 @@ def process_correction_approval(name, action, remarks=None):
     note = (remarks or "").strip()
     if is_override and not note:
         frappe.throw(_("An HR override note is required when approver steps are bypassed."))
+    has_adjustments = requested_check_in_time not in (None, "") or requested_check_out_time not in (None, "")
+    if has_adjustments:
+        if action != "approve":
+            frappe.throw(_("Attendance values can only be adjusted while approving."))
+        _apply_hr_adjustments(doc, requested_check_in_time, requested_check_out_time)
 
     current_step = next((row for row in doc.approval_steps if row.status == "Pending" and row.approver == user), None)
     if current_step:

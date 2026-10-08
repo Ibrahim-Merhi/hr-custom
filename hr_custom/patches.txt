@@ -6,3 +6,4 @@ hr_custom.patches.v1_0.configure_employee_portal_defaults
 hr_custom.patches.v1_0.backfill_yearly_allocation_employee_status
 hr_custom.patches.v1_0.set_fast_precise_location_timeout
 hr_custom.patches.v1_0.optimize_location_performance
+hr_custom.patches.v1_0.route_attendance_corrections_to_hr
