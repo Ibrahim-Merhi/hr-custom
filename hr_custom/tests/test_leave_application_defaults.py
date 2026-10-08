@@ -72,5 +72,63 @@ class TestLeaveApplicationDefaults(unittest.TestCase):
         )
 
 
+class TestPendingLeaveWithdrawal(unittest.TestCase):
+    def _pending_request(self, **values):
+        request = frappe._dict(
+            employee="HR-EMP-00062",
+            docstatus=0,
+            status="Open",
+            custom_approval_stage="Pending Approver Approval",
+        )
+        request.update(values)
+        return request
+
+    def test_employee_can_withdraw_own_pending_request(self):
+        simple_leave.validate_pending_leave_withdrawal(
+            self._pending_request(), "HR-EMP-00062"
+        )
+
+    def test_employee_cannot_withdraw_another_employees_request(self):
+        with (
+            patch.object(simple_leave, "_", side_effect=lambda message: message),
+            patch.object(simple_leave.frappe, "throw", side_effect=frappe.PermissionError),
+        ):
+            with self.assertRaises(frappe.PermissionError):
+                simple_leave.validate_pending_leave_withdrawal(
+                    self._pending_request(), "HR-EMP-00999"
+                )
+
+    def test_employee_can_edit_own_request_waiting_for_approver(self):
+        simple_leave.validate_pending_leave_edit(
+            self._pending_request(), "HR-EMP-00062"
+        )
+
+    def test_request_waiting_for_hr_cannot_be_edited(self):
+        with (
+            patch.object(simple_leave, "_", side_effect=lambda message: message),
+            patch.object(simple_leave.frappe, "throw", side_effect=frappe.ValidationError),
+        ):
+            with self.assertRaises(frappe.ValidationError):
+                simple_leave.validate_pending_leave_edit(
+                    self._pending_request(custom_approval_stage="Pending HR Approval"),
+                    "HR-EMP-00062",
+                )
+
+    def test_approved_request_cannot_be_withdrawn(self):
+        with (
+            patch.object(simple_leave, "_", side_effect=lambda message: message),
+            patch.object(simple_leave.frappe, "throw", side_effect=frappe.ValidationError),
+        ):
+            with self.assertRaises(frappe.ValidationError):
+                simple_leave.validate_pending_leave_withdrawal(
+                    self._pending_request(
+                        docstatus=1,
+                        status="Approved",
+                        custom_approval_stage="Approved",
+                    ),
+                    "HR-EMP-00062",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -324,3 +324,15 @@ Correction submitted,تم إرسال طلب التصحيح
 Location permission was denied. Enable Location for this site in phone Settings.,تم رفض إذن الموقع. فعّل الموقع لهذا الموقع من إعدادات الهاتف.
 "Leave request {0} for {1} sent to {2} approver(s). Return to work: {3}.","تم إرسال طلب الإجازة {0} لمدة {1} إلى {2} من المعتمدين. العودة إلى العمل: {3}."
 "You are currently about {0} from {1}.\n\nTo record attendance, move within {2} of this branch, then try again.","أنت حالياً على بُعد نحو {0} من {1}.\n\nلتسجيل الحضور، انتقل إلى مسافة لا تتجاوز {2} من هذا الفرع ثم أعد المحاولة."
+Withdraw Request,سحب الطلب
+Withdraw leave request?,هل تريد سحب طلب الإجازة؟
+This pending request will be deleted. You can create a corrected request afterward.,سيتم حذف هذا الطلب المعلّق. يمكنك إنشاء طلب مصحح بعد ذلك.
+Could not withdraw leave request,تعذر سحب طلب الإجازة
+You may only withdraw your own leave request.,يمكنك سحب طلب الإجازة الخاص بك فقط.
+Only a leave request that is still pending approval can be withdrawn.,يمكن سحب طلب الإجازة فقط ما دام قيد الموافقة.
+Edit Request,تعديل الطلب
+Edit Leave Request,تعديل طلب الإجازة
+Save Changes,حفظ التعديلات
+Leave request updated and returned to the first approver.,تم تحديث طلب الإجازة وإعادته إلى المعتمد الأول.
+You may only edit your own leave request.,يمكنك تعديل طلب الإجازة الخاص بك فقط.
+This leave request can no longer be edited because it is not waiting for an employee approver.,لم يعد من الممكن تعديل طلب الإجازة لأنه ليس بانتظار موافقة معتمد الموظف.

@@ -168,7 +168,7 @@ frappe.ready(() => {
 	function api(method, args = {}) {
 		const action = method.split(".").pop();
 		return new Promise((resolve, reject) => frappe.call({
-			method, args, type: /^(submit|mark|archive|delete|process|set)_/.test(action) ? "POST" : "GET", silent: true,
+			method, args, type: /^(submit|mark|archive|delete|process|set|withdraw)_/.test(action) ? "POST" : "GET", silent: true,
 			callback: (response) => resolve(response.message),
 			error: (response) => {
 				let text = __("Request failed.");
@@ -473,12 +473,15 @@ frappe.ready(() => {
 	}
 
 	let currentLeaveDetail = null;
+	let currentLeaveData = null;
 	let currentCorrectionDetail = null;
 	let currentCorrectionContext = null;
 	async function openLeaveDetail(name, allowAction = false) {
 		currentLeaveDetail = name;
+		currentLeaveData = null;
 		openSheet(byId("leave-detail-sheet"));
 		const container = byId("leave-detail-content");
+		byId("leave-owner-actions").classList.add("is-hidden");
 		container.innerHTML = `<div class="history-loading">${__("Loading leave request…")}</div>`;
 		try {
 			const [row, context] = await Promise.all([
@@ -486,9 +489,13 @@ frappe.ready(() => {
 				api("hr_custom.services.simple_leave.get_leave_approval_context", {name}),
 			]);
 			setText("leave-detail-title", __(row.leave_type || "Leave Request"));
+			currentLeaveData = row;
 			const field = (label, value) => `<div class="leave-detail-field"><span>${label}</span><strong>${frappe.utils.escape_html(String(value || "—"))}</strong></div>`;
 			container.innerHTML = field(__("Employee"), row.employee_name || row.employee) + field(__("Dates"), `${portalDate(row.from_date)} – ${portalDate(row.to_date)}`) + field(__("Amount"), `${formatNumber(row.custom_leave_unit === "Hours" ? row.custom_leave_hours : row.total_leave_days)} ${__(row.custom_leave_unit === "Hours" ? "hours" : "days")}`) + field(__("Status"), __(row.stage || row.status)) + field(__("Reason"), row.description) + `<div class="leave-detail-field"><span>${__("Approval Progress")}</span>${(row.steps || []).map((step) => `<div class="approval-step"><strong>${frappe.utils.escape_html(isArabic ? (step.approver_name_ar || step.approver_name || step.approver) : (step.approver_name || step.approver))}</strong><b>${frappe.utils.escape_html(__(step.status))}</b></div>`).join("") || `<strong>${__("No approval steps")}</strong>`}</div>`;
 			byId("leave-detail-actions").classList.toggle("is-hidden", !(allowAction && context.can_act));
+			byId("leave-owner-actions").classList.toggle("is-hidden", !(row.can_edit || row.can_withdraw));
+			byId("edit-leave-request").classList.toggle("is-hidden", !row.can_edit);
+			byId("withdraw-leave-request").classList.toggle("is-hidden", !row.can_withdraw);
 			setText("approve-leave", context.is_final_hr_step ? __("Final Approve & Submit") : __("Approve"));
 		} catch (error) { container.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
 	}
@@ -763,12 +770,13 @@ frappe.ready(() => {
 	}
 
 	let leaveSubmissionSequence = 0;
+	let editingLeaveName = null;
 	function resetLeaveSubmitState(clearMessage = true) {
 		leaveSubmissionSequence += 1;
 		const button = byId("submit-leave-request");
 		if (button) {
 			button.disabled = false;
-			button.textContent = __("Send Leave Request");
+			button.textContent = editingLeaveName ? __("Save Changes") : __("Send Leave Request");
 		}
 		if (clearMessage) {
 			const message = byId("leave-message");
@@ -779,18 +787,34 @@ frappe.ready(() => {
 		}
 	}
 
-	async function openLeaveRequest() {
+	async function openLeaveRequest(editRow = null) {
 		resetLeaveSubmitState();
+		const isEdit = Boolean(editRow?.name);
+		editingLeaveName = isEdit ? editRow.name : null;
+		byId("simple-leave-form").reset();
 		const today = moment().format("YYYY-MM-DD");
-		if (!byId("leave-from-date").value) byId("leave-from-date").value = today;
-		if (!byId("leave-to-date").value) byId("leave-to-date").value = byId("leave-from-date").value;
+		byId("leave-from-date").value = isEdit ? moment(editRow.from_date).format("YYYY-MM-DD") : today;
+		byId("leave-to-date").value = isEdit ? moment(editRow.to_date).format("YYYY-MM-DD") : byId("leave-from-date").value;
+		byId("leave-reason").value = isEdit ? (editRow.description || "") : "";
+		setText("leave-form-title", isEdit ? __("Edit Leave Request") : __("Request Leave"));
+		setText("submit-leave-request", isEdit ? __("Save Changes") : __("Send Leave Request"));
+		if (isEdit) closeSheet(byId("leave-detail-sheet"));
 		openSheet(byId("leave-sheet"));
 		await loadAvailableLeaveTypes();
+		if (isEdit) {
+			byId("leave-type").value = editRow.leave_type;
+			byId("leave-half-day").checked = Boolean(Number(editRow.half_day));
+			byId("leave-duration").value = editRow.custom_leave_duration || "Full Scheduled Hours";
+			byId("leave-partial-hours").value = editRow.custom_partial_hours || "";
+			updateSelectedLeaveType();
+		}
 		scheduleLeavePreview();
 	}
 
 	function closeLeaveRequest() {
 		resetLeaveSubmitState();
+		editingLeaveName = null;
+		setText("leave-form-title", __("Request Leave"));
 		closeSheet(byId("leave-sheet"));
 	}
 
@@ -866,14 +890,19 @@ frappe.ready(() => {
 		message.className = "feedback";
 		message.textContent = __("Selecting your leave allocation and approver…");
 		try {
+			const method = editingLeaveName ? "update_pending_leave" : "submit_simple_leave";
+			const args = {from_date: byId("leave-from-date").value, to_date: byId("leave-to-date").value, reason: byId("leave-reason").value, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value, half_day: byId("leave-half-day").checked ? 1 : 0};
+			if (editingLeaveName) args.name = editingLeaveName;
 			const result = await Promise.race([
-				api("hr_custom.services.simple_leave.submit_simple_leave", {from_date: byId("leave-from-date").value, to_date: byId("leave-to-date").value, reason: byId("leave-reason").value, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value, half_day: byId("leave-half-day").checked ? 1 : 0}),
+				api(`hr_custom.services.simple_leave.${method}`, args),
 				new Promise((_, reject) => setTimeout(() => reject(new Error(__("The leave request timed out. Please try again."))), 20000)),
 			]);
 			if (submissionSequence !== leaveSubmissionSequence) return;
 			message.className = "feedback success";
 			const amount = result.leave_unit === "Hours" ? __("{0} hours", [result.leave_hours]) : __("{0} days", [result.leave_days]);
-			message.textContent = __("Leave request {0} for {1} sent to {2} approver(s). Return to work: {3}.", [result.name, amount, formatNumber(result.approver_count), portalDate(result.return_to_work_date, {day: "numeric", month: "long", year: "numeric"})]);
+			message.textContent = result.updated
+				? __("Leave request updated and returned to the first approver.")
+				: __("Leave request {0} for {1} sent to {2} approver(s). Return to work: {3}.", [result.name, amount, formatNumber(result.approver_count), portalDate(result.return_to_work_date, {day: "numeric", month: "long", year: "numeric"})]);
 			byId("simple-leave-form").reset();
 			loadedSections.delete("leaves");
 			await loadLeaves(true);
@@ -990,6 +1019,33 @@ frappe.ready(() => {
 	}
 	byId("approve-leave").onclick = () => actOnPortalLeave("approve");
 	byId("reject-leave").onclick = () => actOnPortalLeave("reject");
+	byId("edit-leave-request").onclick = () => {
+		if (currentLeaveData?.can_edit) openLeaveRequest(currentLeaveData);
+	};
+	byId("withdraw-leave-request").onclick = async () => {
+		if (!currentLeaveDetail) return;
+		const confirmed = await showAppDialog({
+			title: __("Withdraw leave request?"),
+			message: __("This pending request will be deleted. You can create a corrected request afterward."),
+			icon: "!",
+			confirmLabel: __("Withdraw Request"),
+			showCancel: true,
+			danger: true,
+		});
+		if (!confirmed) return;
+		const button = byId("withdraw-leave-request");
+		button.disabled = true;
+		try {
+			await api("hr_custom.services.simple_leave.withdraw_pending_leave", {name: currentLeaveDetail});
+			closeSheet(byId("leave-detail-sheet"));
+			currentLeaveDetail = null;
+			loadedSections.delete("leaves"); loadedSections.delete("approvals");
+			await loadLeaves(true);
+			loadNotifications();
+		} catch (error) {
+			await showAppDialog({title: __("Could not withdraw leave request"), message: error.message, icon: "!"});
+		} finally { button.disabled = false; }
+	};
 	let notificationPullStart = null;
 	byId("notification-sheet").addEventListener("touchstart", (event) => {
 		const list = byId("notification-list");

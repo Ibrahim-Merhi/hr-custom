@@ -293,6 +293,7 @@ def _localized_approval_steps(rows):
 @frappe.whitelist()
 def get_portal_leave_detail(name):
     doc = frappe.get_doc("Leave Application", name)
+    employee = _employee_for_user()
     if not _can_review_leave(doc, frappe.session.user):
         frappe.throw(_("You are not permitted to view this leave request."), frappe.PermissionError)
     return {
@@ -302,6 +303,21 @@ def get_portal_leave_detail(name):
         "status": doc.status, "stage": doc.custom_approval_stage,
         "current_approver": doc.custom_current_approver,
         "steps": _localized_approval_steps(doc.custom_approval_steps),
+        "half_day": doc.half_day,
+        "custom_leave_duration": doc.get("custom_leave_duration"),
+        "custom_partial_hours": doc.get("custom_partial_hours"),
+        "can_edit": bool(
+            doc.employee == employee.name
+            and doc.docstatus == 0
+            and doc.status == "Open"
+            and doc.custom_approval_stage == "Pending Approver Approval"
+        ),
+        "can_withdraw": bool(
+            doc.employee == employee.name
+            and doc.docstatus == 0
+            and doc.status == "Open"
+            and doc.custom_approval_stage in ("Pending Approver Approval", "Pending HR Approval")
+        ),
     }
 
 

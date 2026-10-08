@@ -121,6 +121,123 @@ def populate_leave_application_defaults(doc, method=None):
     doc.leave_approver = defaults["leave_approver"]
 
 
+def validate_pending_leave_withdrawal(doc, employee):
+    if doc.employee != employee:
+        frappe.throw(_("You may only withdraw your own leave request."), frappe.PermissionError)
+    if doc.docstatus != 0 or doc.status != "Open" or doc.custom_approval_stage not in (
+        "Pending Approver Approval",
+        "Pending HR Approval",
+    ):
+        frappe.throw(_("Only a leave request that is still pending approval can be withdrawn."))
+
+
+def validate_pending_leave_edit(doc, employee):
+    if doc.employee != employee:
+        frappe.throw(_("You may only edit your own leave request."), frappe.PermissionError)
+    if doc.docstatus != 0 or doc.status != "Open" or doc.custom_approval_stage != "Pending Approver Approval":
+        frappe.throw(_("This leave request can no longer be edited because it is not waiting for an employee approver."))
+
+
+@frappe.whitelist(methods=["POST"])
+def update_pending_leave(
+    name,
+    from_date,
+    to_date,
+    reason,
+    leave_type,
+    leave_duration=None,
+    partial_hours=None,
+    half_day=0,
+):
+    """Update an employee-owned request and restart its approval route."""
+    from hr_custom.api.mobile_attendance import _employee_for_user
+
+    employee = _employee_for_user()
+    frappe.db.sql("select name from `tabLeave Application` where name=%s for update", name)
+    doc = frappe.get_doc("Leave Application", name)
+    validate_pending_leave_edit(doc, employee.name)
+
+    start, end = getdate(from_date), getdate(to_date)
+    reason = (reason or "").strip()
+    if not reason:
+        frappe.throw(_("Please enter the reason for your leave."))
+    if end < start:
+        frappe.throw(_("To Date cannot be before From Date."))
+    leave_type = select_leave_type(employee.name, start, end, requested_leave_type=leave_type)
+    unit = get_leave_unit(leave_type)
+    preview = calculate_leave_calendar(
+        employee.name, leave_type, start, end, leave_duration, partial_hours, half_day
+    )
+    approvers = get_employee_approvers(employee.name)
+    if not approvers:
+        frappe.throw(_("No leave approver is configured for your employee profile."))
+
+    doc.update(
+        {
+            "leave_type": leave_type,
+            "from_date": start,
+            "to_date": end,
+            "half_day": cint(half_day) if unit == "Days" else 0,
+            "half_day_date": start if unit == "Days" and cint(half_day) else None,
+            "description": reason,
+            "custom_leave_duration": leave_duration,
+            "custom_partial_hours": partial_hours,
+            "custom_approval_stage": "Pending Approver Approval",
+            "custom_current_approver": approvers[0],
+            "status": "Open",
+        }
+    )
+    doc.set("custom_approval_steps", [])
+    for sequence, approver in enumerate(approvers, 1):
+        doc.append(
+            "custom_approval_steps",
+            {"approver": approver, "sequence": sequence, "status": "Pending"},
+        )
+
+    frappe.db.delete(
+        "PWA Notification",
+        {"reference_document_type": "Leave Application", "reference_document_name": name},
+    )
+    from hr_custom.services.portal_identity import run_portal_document_as_system_user
+
+    with run_portal_document_as_system_user():
+        doc.flags.ignore_permissions = True
+        doc.save()
+        notify_leave_workflow(doc)
+    return {
+        "name": doc.name,
+        "leave_type": leave_type,
+        "leave_unit": unit,
+        "leave_days": preview.get("leave_days"),
+        "leave_hours": preview.get("total_leave_hours"),
+        "return_to_work_date": preview["return_to_work_date"],
+        "approver_count": len(approvers),
+        "status": doc.status,
+        "updated": 1,
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def withdraw_pending_leave(name):
+    """Delete an authenticated employee's request before final approval."""
+    from hr_custom.api.mobile_attendance import _employee_for_user
+
+    employee = _employee_for_user()
+    frappe.db.sql("select name from `tabLeave Application` where name=%s for update", name)
+    doc = frappe.get_doc("Leave Application", name)
+    validate_pending_leave_withdrawal(doc, employee.name)
+
+    frappe.db.delete(
+        "PWA Notification",
+        {"reference_document_type": "Leave Application", "reference_document_name": name},
+    )
+    from hr_custom.services.portal_identity import run_portal_document_as_system_user
+
+    with run_portal_document_as_system_user():
+        frappe.delete_doc("Leave Application", name, ignore_permissions=True)
+    return {"name": name, "withdrawn": 1}
+
+
 def initialize_leave_approval(doc, method=None):
     """Build an immutable, ordered approval route from the Employee setup."""
     if doc.doctype != "Leave Application" or doc.get("custom_approval_steps"):
