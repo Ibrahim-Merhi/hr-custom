@@ -162,8 +162,8 @@ def set_employee_portal_password(employee, password):
 	_require_admin()
 	employee_row = _ensure_real_employee(employee)
 	password = password or ""
-	if len(password) < 12:
-		frappe.throw(_("The new portal password must contain at least 12 characters."))
+	if not password:
+		frappe.throw(_("Enter a portal password."))
 	credential = frappe.db.get_value("Employee Portal Credential", {"employee": employee}, "name")
 	if not credential:
 		frappe.throw(_("This employee does not have a portal credential."))
@@ -184,8 +184,8 @@ def create_employee_portal_access(employee, username, password):
 	username = (username or employee_row.attendance_device_id or "").strip()
 	if not username:
 		frappe.throw(_("Enter a portal username or set the Employee Attendance Device ID."))
-	if len(password or "") < 12:
-		frappe.throw(_("The portal password must contain at least 12 characters."))
+	if not password:
+		frappe.throw(_("Enter a portal password."))
 	doc = frappe.get_doc({"doctype": "Employee Portal Credential", "account_type": "Employee", "employee": employee, "username": username, "password": password, "enabled": 1})
 	doc.append("roles", {"portal_role": "Employee"})
 	actor = frappe.session.user
@@ -201,8 +201,8 @@ def set_employee_desk_password(employee, password):
 	employee_row = _ensure_real_employee(employee)
 	if not employee_row.user_id or not frappe.db.exists("User", employee_row.user_id):
 		frappe.throw(_("This employee is not linked to a Desk User."))
-	if len(password or "") < 12:
-		frappe.throw(_("The Desk password must contain at least 12 characters."))
+	if not password:
+		frappe.throw(_("Enter a Desk password."))
 	update_password(employee_row.user_id, password)
 	frappe.db.delete("Sessions", {"user": employee_row.user_id})
 	frappe.get_doc("Employee", employee).add_comment("Info", _("Desk password reset and sessions revoked by {0}.").format(frappe.session.user))
@@ -289,7 +289,7 @@ def create_yearly_leave_allocation(employee, leave_type, allocated_amount, alloc
 
 
 @frappe.whitelist()
-def get_attendance(search=None, from_date=None, to_date=None, start=0, page_length=50, export=0):
+def get_attendance(search=None, from_date=None, to_date=None, status=None, start=0, page_length=50, export=0):
 	_require_admin()
 	start, page_length = _page(start, page_length)
 	end = getdate(to_date or nowdate())
@@ -299,6 +299,8 @@ def get_attendance(search=None, from_date=None, to_date=None, start=0, page_leng
 	if (end - begin).days > 366:
 		frappe.throw(_("Choose a date range of 366 days or less."))
 	filters = {"attendance_date": ["between", [begin, end]]}
+	if status in ("Present", "Absent", "On Leave", "Half Day", "Work From Home"):
+		filters["status"] = status
 	if (search or "").strip():
 		filters["employee_name"] = ["like", f"%{search.strip()}%"]
 	if frappe.get_meta("Employee").has_field("custom_is_payroll_identity"):

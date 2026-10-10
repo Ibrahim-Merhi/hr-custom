@@ -665,6 +665,18 @@ frappe.ready(() => {
 	let adminEmployee = null;
 	let adminPasswordMode = "portal";
 	let adminAction = null;
+	let adminAttendanceStatus = "";
+	const adminSearchTimers = {};
+	const adminIcon = (name) => {
+		const paths = {
+			people: '<path d="M16 20v-1.5a4.5 4.5 0 0 0-4.5-4.5h-3A4.5 4.5 0 0 0 4 18.5V20"/><circle cx="10" cy="7" r="4"/><path d="M17 11a3 3 0 1 0 0-6M20 20v-1.5a4 4 0 0 0-3-3.7"/>',
+			active: '<path d="M20 11.1V12a8 8 0 1 1-4.7-7.3"/><path d="m20 4-9 9-3-3"/>',
+			pending: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+			attendance: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+			accounts: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="11" r="2"/><path d="M6 16a3 3 0 0 1 6 0M15 9h3M15 13h3"/>',
+		};
+		return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.people}</svg>`;
+	};
 	const adminEmployeeFields = [
 		["employee_name", __("Employee Name")], ["first_name", __("First Name")], ["middle_name", __("Middle Name")], ["last_name", __("Last Name")],
 		["gender", __("Gender")], ["date_of_birth", __("Date of Birth"), "date"], ["date_of_joining", __("Date of Joining"), "date"], ["status", __("Status")],
@@ -706,7 +718,7 @@ frappe.ready(() => {
 				fields.innerHTML = `<label>${__("Employee")}<select name="employee" required>${employees}</select></label><label>${__("Leave Type")}<select name="leave_type" required>${leaveTypes}</select></label><label>${__("Allocated Amount")}<input type="number" name="allocated_amount" min="0.25" step="0.25" required></label><label>${__("Allocation Year")}<input type="number" name="allocation_year" value="${year}" required></label><div class="date-grid"><label>${__("From Date")}<input type="date" name="from_date" value="${year}-01-01" required></label><label>${__("To Date")}<input type="date" name="to_date" value="${year}-12-31" required></label></div>`;
 			} else if (action === "portal") {
 				setText("admin-action-title", __("Create Portal Access"));
-				fields.innerHTML = `<label>${__("Portal Username")}<input name="username" value="${frappe.utils.escape_html(adminEmployee?.attendance_device_id || "")}" required></label><label>${__("Password")}<input type="password" name="password" minlength="12" autocomplete="new-password" required></label><label>${__("Confirm Password")}<input type="password" name="confirm_password" minlength="12" autocomplete="new-password" required></label>`;
+				fields.innerHTML = `<label>${__("Portal Username")}<input name="username" value="${frappe.utils.escape_html(adminEmployee?.attendance_device_id || "")}" required></label><label>${__("Password")}<input type="password" name="password" autocomplete="new-password" required></label><label>${__("Confirm Password")}<input type="password" name="confirm_password" autocomplete="new-password" required></label>`;
 			}
 		} catch (error) { fields.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
 	}
@@ -716,11 +728,18 @@ frappe.ready(() => {
 		try {
 			const data = await api("hr_custom.api.portal_admin.get_overview");
 			const metrics = [
-				[__("Employees"), data.employees, "people", "♙"], [__("Active Employees"), data.active_employees, "active", "✓"],
-				[__("Pending Leaves"), data.pending_leaves, "pending", "□"], [__("Attendance Today"), data.attendance_today, "attendance", "◷"],
-				[__("Portal Accounts"), data.portal_accounts, "accounts", "↗"],
+				[__("Employees"), data.employees, "people", "employees"], [__("Active Employees"), data.active_employees, "active", "employees"],
+				[__("Pending Leaves"), data.pending_leaves, "pending", "leaves"], [__("Attendance Today"), data.attendance_today, "attendance", "attendance"],
+				[__("Portal Accounts"), data.portal_accounts, "accounts", "employees"],
 			];
-			container.innerHTML = `<div class="admin-overview-intro"><div><strong>${__("Organization snapshot")}</strong><span>${__("Live totals from ERPNext")}</span></div><small>${moment().format("D MMM YYYY")}</small></div><div class="admin-overview-grid">${metrics.map(([label, value, type, icon]) => `<div class="admin-metric admin-metric-${type}"><div class="admin-metric-icon">${icon}</div><span>${label}</span><strong>${Number(value || 0)}</strong></div>`).join("")}</div>`;
+			container.innerHTML = `<div class="admin-overview-intro"><div><strong>${__("Organization snapshot")}</strong><span>${__("Select a card to review its records")}</span></div><small>${moment().format("D MMM YYYY")}</small></div><div class="admin-overview-grid">${metrics.map(([label, value, type, target]) => `<button type="button" class="admin-metric admin-metric-${type}" data-admin-target="${target}" data-admin-metric="${type}"><div class="admin-metric-icon">${adminIcon(type)}</div><span>${label}</span><strong>${Number(value || 0)}</strong><small>${__("View records")} →</small></button>`).join("")}</div>`;
+			container.querySelectorAll("[data-admin-target]").forEach((card) => card.addEventListener("click", () => {
+				if (card.dataset.adminMetric === "attendance") {
+					byId("admin-attendance-from").value = moment().format("YYYY-MM-DD");
+					byId("admin-attendance-to").value = moment().format("YYYY-MM-DD");
+				}
+				showAdminSection(card.dataset.adminTarget);
+			}));
 		} catch (error) { container.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
 	}
 
@@ -746,8 +765,9 @@ frappe.ready(() => {
 	async function loadAdminAttendance() {
 		const container = byId("admin-attendance-list");
 		try {
-			const rows = await api("hr_custom.api.portal_admin.get_attendance", {search: byId("admin-attendance-search").value, from_date: byId("admin-attendance-from").value, to_date: byId("admin-attendance-to").value, page_length: 200});
-			container.innerHTML = rows.length ? `<div class="admin-results-heading"><span>${__("Attendance records")}</span><b>${rows.length}</b></div>` + rows.map((row) => `<div class="admin-list-row"><div class="admin-record-icon attendance">◷</div><div class="admin-row-main"><div class="admin-row-title"><strong>${frappe.utils.escape_html(row.employee_name || row.employee)}</strong><span class="admin-status ${row.status === "Present" ? "is-success" : row.status === "Absent" ? "is-danger" : "is-warning"}">${frappe.utils.escape_html(__(row.status))}</span></div><span>${portalDate(row.attendance_date)} · ${formatNumber(row.working_hours)} ${__("hours")}</span><small>${row.in_time ? moment(row.in_time).format("HH:mm") : "—"} → ${row.out_time ? moment(row.out_time).format("HH:mm") : "—"}${Number(row.late_entry) ? ` · ${__("Late")}` : ""}${Number(row.early_exit) ? ` · ${__("Early exit")}` : ""}</small></div></div>`).join("") : `<div class="admin-empty"><b>◷</b><strong>${__("No attendance records found")}</strong><span>${__("Adjust the date range or employee search.")}</span></div>`;
+			const rows = await api("hr_custom.api.portal_admin.get_attendance", {search: byId("admin-attendance-search").value, from_date: byId("admin-attendance-from").value, to_date: byId("admin-attendance-to").value, status: adminAttendanceStatus, page_length: 200});
+			const cell = (label, value, className = "") => `<div class="admin-attendance-cell ${className}" data-label="${frappe.utils.escape_html(label)}">${value}</div>`;
+			container.innerHTML = rows.length ? `<div class="admin-results-heading"><span>${__("Attendance records")}</span><b>${rows.length}</b></div><div class="admin-attendance-table" role="table"><div class="admin-attendance-tr admin-attendance-head" role="row"><div>${__("Employee")}</div><div>${__("Date")}</div><div>${__("Status")}</div><div>${__("In")}</div><div>${__("Out")}</div><div>${__("Hours")}</div></div>${rows.map((row) => `<div class="admin-attendance-tr" role="row">${cell(__("Employee"), `<strong>${frappe.utils.escape_html(row.employee_name || row.employee)}</strong><small>${frappe.utils.escape_html(row.employee)}</small>`, "employee")}${cell(__("Date"), portalDate(row.attendance_date))}${cell(__("Status"), `<span class="admin-status ${row.status === "Present" ? "is-success" : row.status === "Absent" ? "is-danger" : "is-warning"}">${frappe.utils.escape_html(__(row.status))}</span>`)}${cell(__("In"), row.in_time ? moment(row.in_time).format("HH:mm") : "—")}${cell(__("Out"), row.out_time ? moment(row.out_time).format("HH:mm") : "—")}${cell(__("Hours"), `${formatNumber(row.working_hours)}${Number(row.late_entry) ? `<i>${__("Late")}</i>` : ""}${Number(row.early_exit) ? `<i>${__("Early")}</i>` : ""}`)}</div>`).join("")}</div>` : `<div class="admin-empty"><b>${adminIcon("attendance")}</b><strong>${__("No attendance records found")}</strong><span>${__("Adjust the date range, status, or employee search.")}</span></div>`;
 		} catch (error) { container.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
 	}
 
@@ -1178,9 +1198,14 @@ frappe.ready(() => {
 	}
 	byId("admin-attendance-from")?.addEventListener("change", loadAdminAttendance);
 	byId("admin-attendance-to")?.addEventListener("change", loadAdminAttendance);
+	document.querySelectorAll("#admin-attendance-status [data-status]").forEach((button) => button.addEventListener("click", () => {
+		adminAttendanceStatus = button.dataset.status || "";
+		document.querySelectorAll("#admin-attendance-status [data-status]").forEach((item) => item.classList.toggle("active", item === button));
+		loadAdminAttendance();
+	}));
 	byId("admin-attendance-export")?.addEventListener("click", async () => {
 		try {
-			const rows = await api("hr_custom.api.portal_admin.get_attendance", {search: byId("admin-attendance-search").value, from_date: byId("admin-attendance-from").value, to_date: byId("admin-attendance-to").value, export: 1});
+			const rows = await api("hr_custom.api.portal_admin.get_attendance", {search: byId("admin-attendance-search").value, from_date: byId("admin-attendance-from").value, to_date: byId("admin-attendance-to").value, status: adminAttendanceStatus, export: 1});
 			const columns = ["employee", "employee_name", "attendance_date", "status", "in_time", "out_time", "working_hours", "late_entry", "early_exit", "name"];
 			const csv = [columns, ...rows.map((row) => columns.map((key) => row[key] ?? ""))].map((line) => line.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
 			const link = document.createElement("a");
@@ -1221,12 +1246,13 @@ frappe.ready(() => {
 		catch (_) { byId("credential-share-message").select(); document.execCommand("copy"); }
 		await showAppDialog({title: __("Copied"), message: __("The login message was copied."), icon: "✓"});
 	});
-	["admin-employee-search", "admin-leave-search", "admin-attendance-search"].forEach((id) => byId(id)?.addEventListener("keydown", (event) => {
-		if (event.key !== "Enter") return;
-		event.preventDefault();
-		if (id === "admin-employee-search") loadAdminEmployees();
-		else if (id === "admin-leave-search") loadAdminLeaves();
-		else loadAdminAttendance();
+	["admin-employee-search", "admin-leave-search", "admin-attendance-search"].forEach((id) => byId(id)?.addEventListener("input", () => {
+		clearTimeout(adminSearchTimers[id]);
+		adminSearchTimers[id] = setTimeout(() => {
+			if (id === "admin-employee-search") loadAdminEmployees();
+			else if (id === "admin-leave-search") loadAdminLeaves();
+			else loadAdminAttendance();
+		}, 300);
 	}));
 	byId("admin-employee-close")?.addEventListener("click", () => closeSheet(byId("admin-employee-sheet")));
 	byId("admin-employee-sheet")?.addEventListener("click", (event) => { if (event.target === byId("admin-employee-sheet")) closeSheet(byId("admin-employee-sheet")); });
