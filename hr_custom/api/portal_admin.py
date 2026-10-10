@@ -5,7 +5,7 @@ from frappe import _
 from frappe.utils import add_days, cint, getdate, nowdate
 from frappe.utils.password import update_password
 
-from hr_custom.services.portal_identity import has_portal_role
+from hr_custom.services.portal_identity import has_portal_role, run_portal_document_as_system_user
 
 
 EMPLOYEE_EDIT_FIELDS = {
@@ -188,8 +188,10 @@ def create_employee_portal_access(employee, username, password):
 		frappe.throw(_("The portal password must contain at least 12 characters."))
 	doc = frappe.get_doc({"doctype": "Employee Portal Credential", "account_type": "Employee", "employee": employee, "username": username, "password": password, "enabled": 1})
 	doc.append("roles", {"portal_role": "Employee"})
-	doc.insert(ignore_permissions=True)
-	doc.add_comment("Info", _("Portal access created by {0}.").format(frappe.session.user))
+	actor = frappe.session.user
+	with run_portal_document_as_system_user():
+		doc.insert(ignore_permissions=True)
+		doc.add_comment("Info", _("Portal access created by {0}.").format(actor))
 	return {"created": True, "credential": doc.name, "share": _share_payload(employee_row, username, password)}
 
 
