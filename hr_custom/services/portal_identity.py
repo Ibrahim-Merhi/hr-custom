@@ -45,8 +45,11 @@ def get_portal_session(required=False, renew=True):
 		row = frappe.db.get_value(
 			"Employee Portal Session",
 			{"token_hash": token_hash(token), "revoked": 0},
-			["name", "credential", "last_seen"], as_dict=True,
+			["name", "credential", "last_seen", "is_impersonation", "impersonated_by", "impersonation_reason", "expires_on"], as_dict=True,
 		)
+		if row and row.expires_on and get_datetime(row.expires_on) <= now_datetime():
+			frappe.db.set_value("Employee Portal Session", row.name, "revoked", 1, update_modified=False)
+			row = None
 		if row and not frappe.db.get_value("Employee Portal Credential", row.credential, "enabled"):
 			row = None
 	if not row:
@@ -87,7 +90,11 @@ def authenticate_portal_request():
 	command = command or path_command
 	if not command.startswith("hr_custom."):
 		return
-	if command in {"hr_custom.api.portal_auth.login", "hr_custom.api.portal_auth.logout"}:
+	if command in {
+		"hr_custom.api.portal_auth.login",
+		"hr_custom.api.portal_auth.logout",
+		"hr_custom.api.portal_auth.stop_impersonation",
+	}:
 		return
 	credential = get_portal_credential()
 	if credential:
@@ -99,7 +106,10 @@ def authenticate_portal_request():
 
 def get_portal_roles(user=None):
 	credential = get_portal_credential(user)
-	return {row.portal_role for row in credential.roles} if credential else set()
+	roles = {row.portal_role for row in credential.roles} if credential else set()
+	if "Portal Administrator" in roles:
+		roles.update({"Employee", "Leave Approver", "HR"})
+	return roles
 
 
 def has_portal_role(role, user=None):
@@ -108,6 +118,8 @@ def has_portal_role(role, user=None):
 
 def get_portal_employee(user=None, fields=None):
 	credential = get_portal_credential(user, required=True)
+	if not credential.employee:
+		frappe.throw(_("This Portal Administrator account is not linked to an Employee profile."), frappe.PermissionError)
 	fields = fields or ["name", "employee_name"]
 	employee = frappe.db.get_value("Employee", credential.employee, fields, as_dict=True)
 	if not employee or frappe.db.get_value("Employee", credential.employee, "status") != "Active":
@@ -119,7 +131,7 @@ def get_effective_approval_user(user=None):
 	credential = get_portal_credential(user)
 	if not credential:
 		return user or frappe.session.user
-	return frappe.db.get_value("Employee", credential.employee, "user_id") or f"{PORTAL_USER_PREFIX}{credential.name}"
+	return (frappe.db.get_value("Employee", credential.employee, "user_id") if credential.employee else None) or f"{PORTAL_USER_PREFIX}{credential.name}"
 
 
 @contextmanager

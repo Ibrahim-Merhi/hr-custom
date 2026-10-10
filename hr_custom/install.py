@@ -61,6 +61,8 @@ def remove_legacy_portal_users():
     import frappe
 
     for employee in frappe.get_all("Employee Portal Credential", pluck="employee"):
+        if not employee:
+            continue
         safe_employee = re.sub(r"[^a-z0-9]+", ".", employee.lower()).strip(".")
         user = f"portal.{safe_employee}@employees.invalid"
         values = frappe.db.get_value("User", user, ["user_type", "email"], as_dict=True)

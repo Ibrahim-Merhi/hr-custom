@@ -6,9 +6,9 @@ import secrets
 import frappe
 from frappe import _
 from frappe.rate_limiter import rate_limit
-from frappe.utils import now_datetime
+from frappe.utils import add_to_date, now_datetime
 from frappe.utils.password import check_password, get_decrypted_password, update_password
-from hr_custom.services.portal_identity import PORTAL_COOKIE, PORTAL_USER_PREFIX, get_portal_credential, get_portal_session, set_portal_cookie, token_hash
+from hr_custom.services.portal_identity import PORTAL_COOKIE, PORTAL_USER_PREFIX, get_portal_credential, get_portal_session, has_portal_role, set_portal_cookie, token_hash
 
 
 def upgrade_legacy_portal_passwords():
@@ -59,7 +59,7 @@ def login(username=None, password=None):
 		update_password(name, password, doctype="Employee Portal Credential", fieldname="password")
 
 	credential = frappe.get_doc("Employee Portal Credential", name)
-	if frappe.db.get_value("Employee", credential.employee, "status") != "Active":
+	if credential.employee and frappe.db.get_value("Employee", credential.employee, "status") != "Active":
 		frappe.throw(_("Portal access is disabled. Please contact HR."), frappe.PermissionError)
 	# Keep a small, auditable number of active devices per employee.
 	active_sessions = frappe.get_all(
@@ -71,15 +71,17 @@ def login(username=None, password=None):
 
 	raw_token = secrets.token_urlsafe(32)
 	request = getattr(frappe.local, "request", None)
+	portal_roles = {row.portal_role for row in credential.roles}
 	frappe.get_doc({
 		"doctype": "Employee Portal Session", "credential": credential.name,
 		"token_hash": token_hash(raw_token),
 		"last_seen": now_datetime(), "ip_address": getattr(frappe.local, "request_ip", "") or "",
 		"user_agent": request.headers.get("User-Agent", "")[:500] if request else "",
+		"expires_on": add_to_date(now_datetime(), hours=8, as_datetime=True) if "Portal Administrator" in portal_roles else None,
 	}).insert(ignore_permissions=True)
 	set_portal_cookie(raw_token)
 	frappe.db.set_value("Employee Portal Credential", credential.name, "last_login", now_datetime(), update_modified=False)
-	return {"authenticated": True, "employee": credential.employee, "roles": sorted(row.portal_role for row in credential.roles)}
+	return {"authenticated": True, "employee": credential.employee, "roles": sorted(portal_roles)}
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
@@ -89,6 +91,70 @@ def logout():
 		frappe.db.set_value("Employee Portal Session", session.name, "revoked", 1, update_modified=False)
 	frappe.local.cookie_manager.delete_cookie(PORTAL_COOKIE)
 	return {"logged_out": True}
+
+
+def _require_administrator():
+	if frappe.session.user != "Administrator" and not has_portal_role("Portal Administrator"):
+		frappe.throw(_("Only Administrator can impersonate an employee portal account."), frappe.PermissionError)
+
+
+@frappe.whitelist(methods=["POST"])
+def start_impersonation(credential, reason):
+	"""Create a short-lived, audited portal session without using the password."""
+	_require_administrator()
+	reason = (reason or "").strip()
+	if not reason:
+		frappe.throw(_("Enter a troubleshooting reason before starting impersonation."))
+	if len(reason) > 500:
+		frappe.throw(_("The impersonation reason cannot exceed 500 characters."))
+
+	portal_credential = frappe.get_doc("Employee Portal Credential", credential)
+	if not portal_credential.employee:
+		frappe.throw(_("A Portal Administrator credential cannot be impersonated because it has no Employee profile."))
+	if not portal_credential.enabled:
+		frappe.throw(_("This employee portal credential is disabled."))
+	if frappe.db.get_value("Employee", portal_credential.employee, "status") != "Active":
+		frappe.throw(_("The linked Employee is not active."))
+
+	raw_token = secrets.token_urlsafe(32)
+	request = getattr(frappe.local, "request", None)
+	expires_on = add_to_date(now_datetime(), minutes=30, as_datetime=True)
+	session = frappe.get_doc({
+		"doctype": "Employee Portal Session",
+		"credential": portal_credential.name,
+		"token_hash": token_hash(raw_token),
+		"last_seen": now_datetime(),
+		"ip_address": getattr(frappe.local, "request_ip", "") or "",
+		"user_agent": request.headers.get("User-Agent", "")[:500] if request else "",
+		"is_impersonation": 1,
+		"impersonated_by": frappe.session.user,
+		"impersonation_reason": reason,
+		"expires_on": expires_on,
+	}).insert(ignore_permissions=True)
+	set_portal_cookie(raw_token)
+	portal_credential.add_comment(
+		"Info",
+		_("Portal impersonation started by {0}. Reason: {1}. Session: {2}").format(
+			frappe.session.user, reason, session.name
+		),
+	)
+	return {"started": True, "employee": portal_credential.employee, "expires_on": expires_on}
+
+
+@frappe.whitelist(methods=["POST"])
+def stop_impersonation():
+	"""End only the Administrator-owned impersonation session in this browser."""
+	session = get_portal_session(renew=False)
+	if not session or not session.is_impersonation:
+		frappe.throw(_("No active Administrator impersonation session was found."), frappe.PermissionError)
+	frappe.db.set_value("Employee Portal Session", session.name, "revoked", 1, update_modified=False)
+	credential = frappe.get_doc("Employee Portal Credential", session.credential)
+	credential.add_comment(
+		"Info",
+		_("Portal impersonation ended by {0}. Session: {1}").format(session.impersonated_by, session.name),
+	)
+	frappe.local.cookie_manager.delete_cookie(PORTAL_COOKIE)
+	return {"stopped": True}
 
 
 @frappe.whitelist()

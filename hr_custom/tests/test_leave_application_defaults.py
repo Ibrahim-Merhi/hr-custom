@@ -1,6 +1,7 @@
 import unittest
+from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import frappe
 
@@ -106,6 +107,16 @@ class TestPendingLeaveWithdrawal(unittest.TestCase):
             self._pending_request(), "HR-EMP-00062"
         )
 
+    def test_employee_can_edit_legacy_open_request_without_workflow_stage(self):
+        simple_leave.validate_pending_leave_edit(
+            self._pending_request(custom_approval_stage=None), "HR-EMP-00062"
+        )
+
+    def test_employee_can_withdraw_legacy_open_request_without_workflow_stage(self):
+        simple_leave.validate_pending_leave_withdrawal(
+            self._pending_request(custom_approval_stage=None), "HR-EMP-00062"
+        )
+
     def test_request_waiting_for_hr_cannot_be_edited(self):
         with (
             patch.object(simple_leave, "_", side_effect=lambda message: message),
@@ -144,6 +155,72 @@ class TestPendingLeaveWithdrawal(unittest.TestCase):
             job_id="leave-workflow-notify-HR-LAP-TEST-00001",
             leave_name="HR-LAP-TEST-00001",
         )
+
+
+class TestLeaveHROverride(unittest.TestCase):
+    def test_hr_can_approve_while_employee_approver_is_pending(self):
+        pending_step = frappe._dict(
+            approver="HR-EMP-APPROVER", status="Pending", acted_on=None, remarks=None
+        )
+        doc = frappe._dict(
+            name="HR-LAP-TEST-00001",
+            docstatus=0,
+            status="Open",
+            custom_approval_stage="Pending Approver Approval",
+            custom_current_approver="HR-EMP-APPROVER",
+            custom_approval_steps=[pending_step],
+            flags=frappe._dict(),
+            save=MagicMock(),
+            submit=MagicMock(),
+        )
+        database = SimpleNamespace(sql=MagicMock())
+        session = frappe._dict(user="hr.manager@example.com")
+        local = SimpleNamespace(flags=frappe._dict(in_test=True), request=None)
+        with (
+            patch.object(simple_leave.frappe, "db", database),
+            patch.object(simple_leave.frappe, "session", session),
+            patch.object(simple_leave.frappe, "local", local),
+            patch.object(simple_leave.frappe, "get_doc", return_value=doc),
+            patch.object(simple_leave, "_is_hr_manager", return_value=True),
+            patch.object(simple_leave, "get_current_approver_employee", return_value="HR-EMP-HR"),
+            patch.object(simple_leave, "now_datetime", return_value=datetime(2026, 10, 10, 12, 0)),
+            patch.object(simple_leave, "_", side_effect=lambda message: message),
+        ):
+            result = simple_leave.process_leave_approval(
+                doc.name, "approve", "Primary approver is unavailable"
+            )
+
+        self.assertEqual(result["hr_override"], 1)
+        self.assertEqual(doc.custom_approval_stage, "Approved")
+        self.assertEqual(doc.custom_final_approved_by, "hr.manager@example.com")
+        self.assertEqual(doc.custom_hr_override_note, "Primary approver is unavailable")
+        self.assertEqual(pending_step.status, "Skipped")
+        self.assertIn("hr.manager@example.com", pending_step.remarks)
+        doc.save.assert_called_once()
+        doc.submit.assert_called_once()
+
+    def test_hr_override_requires_reason(self):
+        doc = frappe._dict(
+            name="HR-LAP-TEST-00001",
+            docstatus=0,
+            status="Open",
+            custom_approval_stage="Pending Approver Approval",
+            custom_current_approver="HR-EMP-APPROVER",
+            custom_approval_steps=[],
+        )
+        database = SimpleNamespace(sql=MagicMock())
+        local = SimpleNamespace(flags=frappe._dict(in_test=True), request=None)
+        with (
+            patch.object(simple_leave.frappe, "db", database),
+            patch.object(simple_leave.frappe, "local", local),
+            patch.object(simple_leave.frappe, "get_doc", return_value=doc),
+            patch.object(simple_leave, "_is_hr_manager", return_value=True),
+            patch.object(simple_leave, "get_current_approver_employee", return_value="HR-EMP-HR"),
+            patch.object(simple_leave, "_", side_effect=lambda message: message),
+            patch.object(simple_leave.frappe, "throw", side_effect=frappe.ValidationError),
+        ):
+            with self.assertRaises(frappe.ValidationError):
+                simple_leave.process_leave_approval(doc.name, "approve", "")
 
 
 if __name__ == "__main__":

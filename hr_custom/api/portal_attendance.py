@@ -196,8 +196,9 @@ def get_correction_detail(name):
 
     doc = frappe.get_doc("Attendance Correction Request", name)
     from hr_custom.services.portal_identity import get_effective_approval_user
-    own_employee = _employee_for_user().name
-    if doc.employee != own_employee and doc.current_approver != get_effective_approval_user() and not _is_hr_manager():
+    is_hr = _is_hr_manager()
+    own_employee = None if is_hr else _employee_for_user().name
+    if not is_hr and doc.employee != own_employee and doc.current_approver != get_effective_approval_user():
         frappe.throw(_("You are not permitted to view this correction request."), frappe.PermissionError)
     return {
         "name": doc.name, "employee": doc.employee, "employee_name": doc.employee_name,

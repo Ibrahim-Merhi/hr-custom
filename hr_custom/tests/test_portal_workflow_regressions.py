@@ -5,7 +5,85 @@ from unittest.mock import patch
 
 import frappe
 
+from hr_custom.api import mobile_attendance, portal_admin, portal_auth
 from hr_custom.services import attendance_correction, portal_identity
+
+
+class TestPortalImpersonationSecurity(unittest.TestCase):
+    def test_only_administrator_can_start_impersonation(self):
+        with (
+            patch.object(portal_auth.frappe, "session", frappe._dict(user="hr.manager@example.com")),
+            patch.object(portal_auth, "has_portal_role", return_value=False),
+            patch.object(portal_auth.frappe, "throw", side_effect=frappe.PermissionError),
+        ):
+            with self.assertRaises(frappe.PermissionError):
+                portal_auth._require_administrator()
+
+    def test_administrator_can_pass_impersonation_guard(self):
+        with (
+            patch.object(portal_auth.frappe, "session", frappe._dict(user="Administrator")),
+            patch.object(portal_auth.frappe, "throw") as throw,
+        ):
+            portal_auth._require_administrator()
+
+        throw.assert_not_called()
+
+    def test_expired_impersonation_session_is_revoked(self):
+        expired = frappe._dict(
+            name="PORTAL-SESSION-EXPIRED",
+            credential="HR-EMP-00062",
+            last_seen=None,
+            is_impersonation=1,
+            impersonated_by="Administrator",
+            impersonation_reason="Troubleshooting",
+            expires_on=datetime(2026, 10, 10, 11, 59),
+        )
+        database = SimpleNamespace(
+            get_value=lambda *args, **kwargs: expired,
+            set_value=lambda *args, **kwargs: None,
+        )
+        local = frappe._dict(
+            request=SimpleNamespace(cookies={portal_identity.PORTAL_COOKIE: "raw-token"}),
+        )
+        with (
+            patch.object(portal_identity.frappe, "db", database),
+            patch.object(portal_identity.frappe, "local", local),
+            patch.object(portal_identity, "now_datetime", return_value=datetime(2026, 10, 10, 12, 0)),
+            patch.object(database, "set_value", wraps=database.set_value) as set_value,
+        ):
+            self.assertIsNone(portal_identity.get_portal_session(renew=False))
+
+        set_value.assert_called_once_with(
+            "Employee Portal Session",
+            "PORTAL-SESSION-EXPIRED",
+            "revoked",
+            1,
+            update_modified=False,
+        )
+
+    def test_portal_administrator_inherits_all_portal_roles(self):
+        credential = frappe._dict(roles=[frappe._dict(portal_role="Portal Administrator")])
+        with patch.object(portal_identity, "get_portal_credential", return_value=credential):
+            self.assertEqual(
+                portal_identity.get_portal_roles(),
+                {"Portal Administrator", "Employee", "Leave Approver", "HR"},
+            )
+
+    def test_non_admin_portal_user_cannot_change_settings(self):
+        with (
+            patch.object(mobile_attendance, "has_portal_role", return_value=False),
+            patch.object(mobile_attendance.frappe, "throw", side_effect=frappe.PermissionError),
+        ):
+            with self.assertRaises(frappe.PermissionError):
+                mobile_attendance._require_portal_administrator()
+
+    def test_non_admin_portal_user_cannot_access_admin_data(self):
+        with (
+            patch.object(portal_admin, "has_portal_role", return_value=False),
+            patch.object(portal_admin.frappe, "throw", side_effect=frappe.PermissionError),
+        ):
+            with self.assertRaises(frappe.PermissionError):
+                portal_admin._require_admin()
 
 
 class TestPortalDocumentSystemUser(unittest.TestCase):

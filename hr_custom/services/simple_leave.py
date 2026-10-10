@@ -124,7 +124,8 @@ def populate_leave_application_defaults(doc, method=None):
 def validate_pending_leave_withdrawal(doc, employee):
     if doc.employee != employee:
         frappe.throw(_("You may only withdraw your own leave request."), frappe.PermissionError)
-    if doc.docstatus != 0 or doc.status != "Open" or doc.custom_approval_stage not in (
+    if doc.docstatus != 0 or doc.status != "Open" or (doc.custom_approval_stage or "") not in (
+        "",
         "Pending Approver Approval",
         "Pending HR Approval",
     ):
@@ -134,7 +135,7 @@ def validate_pending_leave_withdrawal(doc, employee):
 def validate_pending_leave_edit(doc, employee):
     if doc.employee != employee:
         frappe.throw(_("You may only edit your own leave request."), frappe.PermissionError)
-    if doc.docstatus != 0 or doc.status != "Open" or doc.custom_approval_stage != "Pending Approver Approval":
+    if doc.docstatus != 0 or doc.status != "Open" or (doc.custom_approval_stage or "") not in ("", "Pending Approver Approval"):
         frappe.throw(_("This leave request can no longer be edited because it is not waiting for an employee approver."))
 
 
@@ -155,6 +156,8 @@ def update_pending_leave(
     employee = _employee_for_user()
     frappe.db.sql("select name from `tabLeave Application` where name=%s for update", name)
     doc = frappe.get_doc("Leave Application", name)
+    if doc.docstatus == 0 and doc.status == "Open" and not doc.custom_approval_stage:
+        initialize_leave_approval(doc)
     validate_pending_leave_edit(doc, employee.name)
 
     start, end = getdate(from_date), getdate(to_date)
@@ -354,17 +357,21 @@ def get_leave_approval_context(name):
             doc.save()
             notify_leave_workflow(doc)
     approver_employee = get_current_approver_employee()
+    is_hr = _is_hr_manager()
+    is_hr_override = doc.custom_approval_stage == "Pending Approver Approval" and is_hr
     can_act = (
         doc.docstatus == 0
         and (
             (doc.custom_approval_stage == "Pending Approver Approval" and doc.custom_current_approver == approver_employee and _approver_role_allowed())
-            or (doc.custom_approval_stage == "Pending HR Approval" and _is_hr_manager())
+            or is_hr_override
+            or (doc.custom_approval_stage == "Pending HR Approval" and is_hr)
         )
     )
     return {
         "stage": doc.custom_approval_stage,
         "current_approver": doc.custom_current_approver,
         "can_act": can_act,
+        "is_hr_override": is_hr_override,
         "is_final_hr_step": doc.custom_approval_stage == "Pending HR Approval",
     }
 
@@ -386,17 +393,22 @@ def process_leave_approval(name, action, remarks=None):
 
     approver_employee = get_current_approver_employee()
     is_hr_step = doc.custom_approval_stage == "Pending HR Approval"
+    is_hr_override = doc.custom_approval_stage == "Pending Approver Approval" and _is_hr_manager()
     if is_hr_step:
         if not _is_hr_manager():
             frappe.throw(_("Only an HR Manager can complete the final approval."), frappe.PermissionError)
-    elif doc.custom_current_approver != approver_employee or not _approver_role_allowed():
+    elif not is_hr_override and (doc.custom_current_approver != approver_employee or not _approver_role_allowed()):
         frappe.throw(_("This leave request is waiting for another approver."), frappe.PermissionError)
+
+    note = (remarks or "").strip()
+    if is_hr_override and action == "approve" and not note:
+        frappe.throw(_("Please enter an HR override reason before approving this request."))
 
     current_step = next((row for row in doc.custom_approval_steps if row.status == "Pending" and row.approver == approver_employee), None)
     if current_step:
         current_step.status = "Approved" if action == "approve" else "Rejected"
         current_step.acted_on = now_datetime()
-        current_step.remarks = (remarks or "").strip()
+        current_step.remarks = note
 
     if action == "reject":
         doc.custom_approval_stage = "Rejected"
@@ -406,6 +418,25 @@ def process_leave_approval(name, action, remarks=None):
         doc.save()
         doc.submit()
         return {"name": doc.name, "stage": doc.custom_approval_stage, "status": doc.status, "docstatus": doc.docstatus}
+
+    if is_hr_override:
+        acted_on = now_datetime()
+        audit_note = _("Bypassed and approved by HR {0}: {1}").format(frappe.session.user, note)
+        for step in doc.custom_approval_steps:
+            if step.status == "Pending":
+                step.status = "Skipped"
+                step.acted_on = acted_on
+                step.remarks = audit_note
+        doc.custom_hr_override_note = note
+        doc.custom_final_approved_by = frappe.session.user
+        doc.custom_final_approval_date = acted_on
+        doc.custom_approval_stage = "Approved"
+        doc.custom_current_approver = None
+        doc.status = "Approved"
+        doc.flags.ignore_permissions = True
+        doc.save()
+        doc.submit()
+        return {"name": doc.name, "stage": doc.custom_approval_stage, "status": doc.status, "docstatus": doc.docstatus, "hr_override": 1}
 
     if not is_hr_step:
         next_step = next((row for row in sorted(doc.custom_approval_steps, key=lambda row: (row.sequence, row.idx)) if row.status == "Pending"), None)
@@ -422,6 +453,8 @@ def process_leave_approval(name, action, remarks=None):
     doc.custom_approval_stage = "Approved"
     doc.custom_current_approver = None
     doc.status = "Approved"
+    doc.custom_final_approved_by = frappe.session.user
+    doc.custom_final_approval_date = now_datetime()
     doc.flags.ignore_permissions = True
     doc.save()
     doc.submit()

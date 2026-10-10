@@ -5,7 +5,7 @@ from hrms.hr.doctype.leave_application.leave_application import get_leave_balanc
 
 from hr_custom.attendance.compat import supported_values
 from hr_custom.attendance.geofence import get_distance_in_meters, validate_coordinates
-from hr_custom.services.portal_identity import get_portal_employee
+from hr_custom.services.portal_identity import get_portal_employee, has_portal_role
 
 LOGGER = frappe.logger("hr_mobile_attendance")
 
@@ -18,6 +18,11 @@ def _request_audit():
 
 def _settings():
     return frappe.get_cached_doc("HR Mobile Attendance Settings")
+
+
+def _require_portal_administrator():
+    if not has_portal_role("Portal Administrator"):
+        frappe.throw(_("Only a Portal Administrator can change portal settings."), frappe.PermissionError)
 
 
 def _employee_for_user():
@@ -145,7 +150,77 @@ def get_status():
     radius = (flt(branch.custom_attendance_radius) if branch else 0) or flt(settings.default_radius)
     maximum_accuracy = (flt(branch.custom_max_gps_accuracy) if branch else 0) or flt(settings.default_max_gps_accuracy)
     require_location = cint(settings.require_geolocation) and not cint(employee.get("custom_location_not_required")) and not cint(branch.custom_allow_checkin_without_location if branch else 0)
-    return {"employee": employee.name, "employee_name": employee.employee_name, "first_name": employee.first_name, "custom_first_name_ar": employee.get("custom_first_name_ar"), "custom_employee_name_ar": employee.get("custom_employee_name_ar"), "branch": branch.name if branch else None, "branch_name_arabic": branch.get("custom_branch_name_arabic") if branch else None, "allowed_branches": [row.name for row in branches], "configuration_error": configuration_error, "server_time": timestamp, "current_state": "CHECKED IN" if latest and latest.log_type == "IN" else "CHECKED OUT", "next_action": "OUT" if latest and latest.log_type == "IN" else "IN", "last_checkin": latest, "branch_location_enabled": bool(branch), "attendance_radius": radius, "maximum_gps_accuracy": maximum_accuracy, "require_geolocation": require_location, "location_cache_seconds": cint(settings.location_cache_seconds) or 60, "fast_location_timeout": cint(settings.fast_location_timeout) or 2, "high_accuracy_timeout": cint(settings.high_accuracy_timeout) or 5, "portal_tabs": {"attendance": cint(settings.show_attendance_tab), "leaves": cint(settings.show_leaves_tab), "salary": cint(settings.show_salary_tab), "profile": cint(settings.show_profile_tab)}}
+    return {"employee": employee.name, "employee_name": employee.employee_name, "first_name": employee.first_name, "custom_first_name_ar": employee.get("custom_first_name_ar"), "custom_employee_name_ar": employee.get("custom_employee_name_ar"), "branch": branch.name if branch else None, "branch_name_arabic": branch.get("custom_branch_name_arabic") if branch else None, "allowed_branches": [row.name for row in branches], "configuration_error": configuration_error, "server_time": timestamp, "current_state": "CHECKED IN" if latest and latest.log_type == "IN" else "CHECKED OUT", "next_action": "OUT" if latest and latest.log_type == "IN" else "IN", "last_checkin": latest, "branch_location_enabled": bool(branch), "attendance_radius": radius, "maximum_gps_accuracy": maximum_accuracy, "require_geolocation": require_location, "location_cache_seconds": cint(settings.location_cache_seconds) or 60, "fast_location_timeout": cint(settings.fast_location_timeout) or 2, "high_accuracy_timeout": cint(settings.high_accuracy_timeout) or 5, "portal_tabs": {"attendance": cint(settings.show_attendance_tab), "leaves": cint(settings.show_leaves_tab), "salary": cint(settings.show_salary_tab), "profile": cint(settings.show_profile_tab), "admin": has_portal_role("Portal Administrator")}}
+
+
+PORTAL_ADMIN_SETTING_FIELDS = {
+    "enable_employee_portal": "check",
+    "enable_mobile_attendance": "check",
+    "show_attendance_tab": "check",
+    "show_leaves_tab": "check",
+    "show_salary_tab": "check",
+    "show_profile_tab": "check",
+    "require_geolocation": "check",
+    "default_radius": "float",
+    "default_max_gps_accuracy": "float",
+    "location_cache_seconds": "int",
+    "fast_location_timeout": "int",
+    "high_accuracy_timeout": "int",
+    "require_branch": "check",
+    "allow_without_branch": "check",
+    "enable_device_audit": "check",
+    "require_registered_device": "check",
+    "enable_ip_audit": "check",
+    "allow_employee_correction_request": "check",
+    "send_corrections_directly_to_hr": "check",
+    "notify_salary_slip_submission": "check",
+}
+
+
+@frappe.whitelist()
+def get_portal_admin_settings():
+    _require_portal_administrator()
+    settings = _settings()
+    return {fieldname: settings.get(fieldname) for fieldname in PORTAL_ADMIN_SETTING_FIELDS}
+
+
+@frappe.whitelist()
+def get_portal_admin_accounts():
+    _require_portal_administrator()
+    return frappe.get_all(
+        "Employee Portal Credential",
+        filters={"enabled": 1, "employee": ["is", "set"]},
+        fields=["name", "employee", "employee_name", "username", "last_login"],
+        order_by="employee_name asc",
+        limit_page_length=0,
+    )
+
+
+@frappe.whitelist(methods=["POST"])
+def update_portal_admin_settings(values):
+    _require_portal_administrator()
+    if isinstance(values, str):
+        values = frappe.parse_json(values)
+    if not isinstance(values, dict):
+        frappe.throw(_("Invalid portal settings."))
+    settings = frappe.get_doc("HR Mobile Attendance Settings")
+    for fieldname, value_type in PORTAL_ADMIN_SETTING_FIELDS.items():
+        if fieldname not in values:
+            continue
+        value = values[fieldname]
+        if value_type == "check":
+            value = cint(value)
+        elif value_type == "int":
+            value = max(0, cint(value))
+        elif value_type == "float":
+            value = max(0, flt(value))
+        settings.set(fieldname, value)
+    if flt(settings.default_radius) <= 0 or flt(settings.default_max_gps_accuracy) <= 0:
+        frappe.throw(_("Attendance radius and maximum GPS accuracy must be greater than zero."))
+    settings.flags.ignore_permissions = True
+    settings.save()
+    frappe.clear_cache(doctype="HR Mobile Attendance Settings")
+    return {"saved": True}
 
 
 @frappe.whitelist()
@@ -265,8 +340,10 @@ def get_leave_portal_data():
 
 def _can_review_leave(doc, user):
     from hr_custom.services.simple_leave import _is_hr_manager, get_current_approver_employee
+    if _is_hr_manager(user):
+        return True
     own_employee = _employee_for_user().name
-    return doc.employee == own_employee or doc.custom_current_approver == get_current_approver_employee(user) or _is_hr_manager(user)
+    return doc.employee == own_employee or doc.custom_current_approver == get_current_approver_employee(user)
 
 
 def _localized_approval_steps(rows):
@@ -301,6 +378,9 @@ def get_portal_leave_detail(name):
         "leave_type": doc.leave_type, "from_date": doc.from_date, "to_date": doc.to_date,
         "total_leave_days": doc.total_leave_days, "custom_leave_unit": doc.get("custom_leave_unit"), "custom_leave_hours": doc.get("custom_leave_hours"), "description": doc.description,
         "status": doc.status, "stage": doc.custom_approval_stage,
+        "hr_override_note": doc.get("custom_hr_override_note"),
+        "final_approved_by": doc.get("custom_final_approved_by"),
+        "final_approval_date": doc.get("custom_final_approval_date"),
         "current_approver": doc.custom_current_approver,
         "steps": _localized_approval_steps(doc.custom_approval_steps),
         "half_day": doc.half_day,
@@ -310,13 +390,13 @@ def get_portal_leave_detail(name):
             doc.employee == employee.name
             and doc.docstatus == 0
             and doc.status == "Open"
-            and doc.custom_approval_stage == "Pending Approver Approval"
+            and (doc.custom_approval_stage or "") in ("", "Pending Approver Approval")
         ),
         "can_withdraw": bool(
             doc.employee == employee.name
             and doc.docstatus == 0
             and doc.status == "Open"
-            and doc.custom_approval_stage in ("Pending Approver Approval", "Pending HR Approval")
+            and (doc.custom_approval_stage or "") in ("", "Pending Approver Approval", "Pending HR Approval")
         ),
     }
 
@@ -328,15 +408,19 @@ def get_leave_approval_queue():
     approver_employee = get_current_approver_employee()
     is_hr = _is_hr_manager()
     fields = ["name", "employee", "employee_name", "leave_type", "from_date", "to_date", "total_leave_days", "custom_leave_unit", "custom_leave_hours", "description", "status", "custom_approval_stage", "creation"]
-    rows = frappe.get_all("Leave Application", filters={"docstatus": 0, "custom_approval_stage": "Pending Approver Approval", "custom_current_approver": approver_employee}, fields=fields, order_by="creation asc", limit=100)
-    for row in rows:
-        row.review_mode = "approver"
     if is_hr:
+        rows = frappe.get_all("Leave Application", filters={"docstatus": 0, "custom_approval_stage": "Pending Approver Approval"}, fields=fields, order_by="creation asc", limit=100)
+        for row in rows:
+            row.review_mode = "hr_override"
         final_rows = frappe.get_all("Leave Application", filters={"docstatus": 0, "custom_approval_stage": "Pending HR Approval"}, fields=fields, order_by="creation asc", limit=100)
         for row in final_rows:
             row.review_mode = "hr"
         rows.extend(final_rows)
         rows.sort(key=lambda row: row.creation)
+    else:
+        rows = frappe.get_all("Leave Application", filters={"docstatus": 0, "custom_approval_stage": "Pending Approver Approval", "custom_current_approver": approver_employee}, fields=fields, order_by="creation asc", limit=100)
+        for row in rows:
+            row.review_mode = "approver"
     configured = has_portal_role("Leave Approver") and frappe.db.exists("Employee Leave Approver", {"approver": approver_employee, "enabled": 1})
     return {"items": rows, "can_review": bool(is_hr or configured)}
 
