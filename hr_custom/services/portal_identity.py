@@ -118,7 +118,7 @@ def has_portal_role(role, user=None):
 
 def get_portal_employee(user=None, fields=None):
 	credential = get_portal_credential(user, required=True)
-	if not credential.employee:
+	if credential.account_type == "Portal Administrator" or not credential.employee:
 		frappe.throw(_("This Portal Administrator account is not linked to an Employee profile."), frappe.PermissionError)
 	fields = fields or ["name", "employee_name"]
 	employee = frappe.db.get_value("Employee", credential.employee, fields, as_dict=True)
@@ -131,7 +131,7 @@ def get_effective_approval_user(user=None):
 	credential = get_portal_credential(user)
 	if not credential:
 		return user or frappe.session.user
-	return (frappe.db.get_value("Employee", credential.employee, "user_id") if credential.employee else None) or f"{PORTAL_USER_PREFIX}{credential.name}"
+	return (frappe.db.get_value("Employee", credential.employee, "user_id") if credential.account_type != "Portal Administrator" and credential.employee else None) or f"{PORTAL_USER_PREFIX}{credential.name}"
 
 
 @contextmanager

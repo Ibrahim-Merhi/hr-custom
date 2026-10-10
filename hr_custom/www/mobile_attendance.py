@@ -26,7 +26,7 @@ def get_context(context):
 	context.impersonation_reason = portal_session.impersonation_reason if context.is_impersonating else None
 	context.session_user = frappe.session.user if context.portal_authenticated else None
 	context.full_name = None
-	if context.portal_authenticated:
+	if context.portal_authenticated and not context.is_portal_administrator:
 		fields = ["first_name", "employee_name"]
 		meta = frappe.get_meta("Employee")
 		for fieldname in ("custom_first_name_ar", "custom_employee_name_ar"):

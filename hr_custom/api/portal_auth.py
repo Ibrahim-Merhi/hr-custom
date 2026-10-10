@@ -59,7 +59,7 @@ def login(username=None, password=None):
 		update_password(name, password, doctype="Employee Portal Credential", fieldname="password")
 
 	credential = frappe.get_doc("Employee Portal Credential", name)
-	if credential.employee and frappe.db.get_value("Employee", credential.employee, "status") != "Active":
+	if credential.account_type != "Portal Administrator" and credential.employee and frappe.db.get_value("Employee", credential.employee, "status") != "Active":
 		frappe.throw(_("Portal access is disabled. Please contact HR."), frappe.PermissionError)
 	# Keep a small, auditable number of active devices per employee.
 	active_sessions = frappe.get_all(

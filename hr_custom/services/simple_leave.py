@@ -14,7 +14,7 @@ def get_current_approver_employee(user=None):
     """Return the Employee behind either a portal credential or Desk user."""
     credential = get_portal_credential(user)
     if credential:
-        return credential.employee
+        return None if credential.account_type == "Portal Administrator" else credential.employee
     return frappe.db.get_value("Employee", {"user_id": user or frappe.session.user, "status": "Active"}, "name")
 
 

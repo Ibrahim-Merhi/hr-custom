@@ -33,7 +33,19 @@ def after_migrate():
     from hr_custom.setup.workspace import ensure_hr_workspace_section
     from hr_custom.api.portal_auth import upgrade_legacy_portal_passwords
     from hr_custom.setup.hr_coordinator import ensure_hr_coordinator_permissions
-    execute(); apply_leave_application_layout(); ensure_hr_workspace_section(); ensure_hr_coordinator_permissions(); upgrade_legacy_portal_passwords(); migrate_leave_approvers_to_employees(); remove_legacy_portal_users()
+    execute(); apply_leave_application_layout(); ensure_hr_workspace_section(); ensure_hr_coordinator_permissions(); upgrade_legacy_portal_passwords(); normalize_portal_administrator_credentials(); migrate_leave_approvers_to_employees(); remove_legacy_portal_users()
+
+
+def normalize_portal_administrator_credentials():
+    """Standalone portal administrators must never inherit an Employee identity."""
+    import frappe
+
+    frappe.db.set_value(
+        "Employee Portal Credential",
+        {"account_type": "Portal Administrator"},
+        {"employee": None, "employee_name": None},
+        update_modified=False,
+    )
 
 
 def migrate_leave_approvers_to_employees():

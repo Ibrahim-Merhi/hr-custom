@@ -6,7 +6,7 @@ from unittest.mock import patch
 import frappe
 
 from hr_custom.api import mobile_attendance, portal_admin, portal_auth
-from hr_custom.services import attendance_correction, portal_identity
+from hr_custom.services import attendance_correction, portal_identity, simple_leave
 
 
 class TestPortalImpersonationSecurity(unittest.TestCase):
@@ -68,6 +68,11 @@ class TestPortalImpersonationSecurity(unittest.TestCase):
                 portal_identity.get_portal_roles(),
                 {"Portal Administrator", "Employee", "Leave Approver", "HR"},
             )
+
+    def test_portal_administrator_never_inherits_stale_employee_identity(self):
+        credential = frappe._dict(account_type="Portal Administrator", employee="E000")
+        with patch.object(simple_leave, "get_portal_credential", return_value=credential):
+            self.assertIsNone(simple_leave.get_current_approver_employee())
 
     def test_non_admin_portal_user_cannot_change_settings(self):
         with (
