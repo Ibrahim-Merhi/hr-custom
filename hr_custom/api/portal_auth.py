@@ -141,7 +141,7 @@ def start_impersonation(credential, reason):
 	return {"started": True, "employee": portal_credential.employee, "expires_on": expires_on}
 
 
-@frappe.whitelist(methods=["POST"])
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def stop_impersonation():
 	"""End only the Administrator-owned impersonation session in this browser."""
 	session = get_portal_session(renew=False)

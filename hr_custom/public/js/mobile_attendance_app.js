@@ -663,12 +663,53 @@ frappe.ready(() => {
 	}
 
 	let adminEmployee = null;
+	let adminPasswordMode = "portal";
+	let adminAction = null;
 	const adminEmployeeFields = [
 		["employee_name", __("Employee Name")], ["first_name", __("First Name")], ["middle_name", __("Middle Name")], ["last_name", __("Last Name")],
 		["gender", __("Gender")], ["date_of_birth", __("Date of Birth"), "date"], ["date_of_joining", __("Date of Joining"), "date"], ["status", __("Status")],
 		["company", __("Company")], ["department", __("Department")], ["designation", __("Designation")], ["branch", __("Branch")],
 		["employment_type", __("Employment Type")], ["cell_number", __("Phone")], ["personal_email", __("Personal Email"), "email"], ["company_email", __("Company Email"), "email"],
 	];
+
+	function employeeOptions(rows) {
+		return rows.map((row) => `<option value="${frappe.utils.escape_html(row.name)}">${frappe.utils.escape_html(row.employee_name || row.name)} · ${frappe.utils.escape_html(row.name)}</option>`).join("");
+	}
+
+	function showCredentialShare(share) {
+		if (!share?.message) return;
+		byId("credential-share-message").value = share.message;
+		const phone = String(share.phone || "").replace(/[^0-9]/g, "");
+		byId("credential-whatsapp").href = `https://wa.me/${phone}?text=${encodeURIComponent(share.message)}`;
+		byId("credential-whatsapp").classList.toggle("is-hidden", !phone);
+		openSheet(byId("credential-share-sheet"));
+	}
+
+	async function openAdminAction(action) {
+		adminAction = action;
+		const fields = byId("admin-action-fields");
+		openSheet(byId("admin-action-sheet"));
+		fields.innerHTML = `<div class="history-loading">${__("Loading…")}</div>`;
+		try {
+			const options = action === "employee" ? null : await api("hr_custom.api.portal_admin.get_form_options");
+			const employees = options ? employeeOptions(options.employees) : "";
+			const leaveTypes = options ? options.leave_types.map((row) => `<option value="${frappe.utils.escape_html(row.name)}">${frappe.utils.escape_html(__(row.name))}</option>`).join("") : "";
+			if (action === "employee") {
+				setText("admin-action-title", __("Add Employee"));
+				fields.innerHTML = `<label>${__("First Name")}<input name="first_name" required></label><label>${__("Last Name")}<input name="last_name"></label><label>${__("Gender")}<select name="gender" required><option value="Male">${__("Male")}</option><option value="Female">${__("Female")}</option></select></label><div class="date-grid"><label>${__("Date of Birth")}<input type="date" name="date_of_birth" required></label><label>${__("Date of Joining")}<input type="date" name="date_of_joining" required></label></div><label>${__("Company")}<input name="company" required></label><label>${__("Branch")}<input name="branch" required></label><label>${__("Department")}<input name="department"></label><label>${__("Phone")}<input name="cell_number" type="tel"></label>`;
+			} else if (action === "leave") {
+				setText("admin-action-title", __("Leave for Employee"));
+				fields.innerHTML = `<label>${__("Employee")}<select name="employee" required>${employees}</select></label><label>${__("Leave Type")}<select name="leave_type" required>${leaveTypes}</select></label><div class="date-grid"><label>${__("From Date")}<input type="date" name="from_date" required></label><label>${__("To Date")}<input type="date" name="to_date" required></label></div><label class="half-day-option"><input type="checkbox" name="half_day"><span>${__("Half Day")}</span></label><label>${__("Reason")}<textarea name="reason" rows="4" required></textarea></label>`;
+			} else if (action === "allocation") {
+				setText("admin-action-title", __("Yearly Leave Allocation"));
+				const year = moment().year();
+				fields.innerHTML = `<label>${__("Employee")}<select name="employee" required>${employees}</select></label><label>${__("Leave Type")}<select name="leave_type" required>${leaveTypes}</select></label><label>${__("Allocated Amount")}<input type="number" name="allocated_amount" min="0.25" step="0.25" required></label><label>${__("Allocation Year")}<input type="number" name="allocation_year" value="${year}" required></label><div class="date-grid"><label>${__("From Date")}<input type="date" name="from_date" value="${year}-01-01" required></label><label>${__("To Date")}<input type="date" name="to_date" value="${year}-12-31" required></label></div>`;
+			} else if (action === "portal") {
+				setText("admin-action-title", __("Create Portal Access"));
+				fields.innerHTML = `<label>${__("Portal Username")}<input name="username" value="${frappe.utils.escape_html(adminEmployee?.attendance_device_id || "")}" required></label><label>${__("Password")}<input type="password" name="password" minlength="12" autocomplete="new-password" required></label><label>${__("Confirm Password")}<input type="password" name="confirm_password" minlength="12" autocomplete="new-password" required></label>`;
+			}
+		} catch (error) { fields.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
+	}
 
 	async function loadAdminOverview() {
 		const container = byId("admin-overview");
@@ -700,7 +741,7 @@ frappe.ready(() => {
 	async function loadAdminAttendance() {
 		const container = byId("admin-attendance-list");
 		try {
-			const rows = await api("hr_custom.api.portal_admin.get_attendance", {search: byId("admin-attendance-search").value, page_length: 200});
+			const rows = await api("hr_custom.api.portal_admin.get_attendance", {search: byId("admin-attendance-search").value, from_date: byId("admin-attendance-from").value, to_date: byId("admin-attendance-to").value, page_length: 200});
 			container.innerHTML = rows.length ? rows.map((row) => `<div class="admin-list-row"><strong>${frappe.utils.escape_html(row.employee_name || row.employee)}</strong><span>${portalDate(row.attendance_date)} · ${frappe.utils.escape_html(__(row.status))} · ${formatNumber(row.working_hours)}h</span><small>${row.in_time ? moment(row.in_time).format("HH:mm") : "—"} – ${row.out_time ? moment(row.out_time).format("HH:mm") : "—"} · ${frappe.utils.escape_html(row.name)}</small></div>`).join("") : `<div class="history-loading">${__("No attendance records found.")}</div>`;
 		} catch (error) { container.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
 	}
@@ -715,6 +756,8 @@ frappe.ready(() => {
 			setText("admin-employee-title", adminEmployee.employee_name || adminEmployee.name);
 			byId("admin-employee-fields").innerHTML = adminEmployeeFields.map(([name, label, type = "text"]) => `<label>${frappe.utils.escape_html(label)}<input name="${name}" type="${type}" value="${frappe.utils.escape_html(String(adminEmployee[name] || ""))}"></label>`).join("");
 			byId("admin-reset-password").disabled = !adminEmployee.portal;
+			byId("admin-create-portal").disabled = Boolean(adminEmployee.portal);
+			byId("admin-reset-desk-password").disabled = !adminEmployee.user_id;
 			byId("admin-toggle-portal").disabled = !adminEmployee.portal;
 			setText("admin-toggle-portal", adminEmployee.portal?.enabled ? __("Disable Portal Access") : __("Enable Portal Access"));
 			byId("admin-impersonate").disabled = !adminEmployee.portal?.enabled;
@@ -1124,6 +1167,55 @@ frappe.ready(() => {
 	byId("admin-employee-search-button")?.addEventListener("click", loadAdminEmployees);
 	byId("admin-leave-search-button")?.addEventListener("click", loadAdminLeaves);
 	byId("admin-attendance-search-button")?.addEventListener("click", loadAdminAttendance);
+	if (byId("admin-attendance-to")) {
+		byId("admin-attendance-to").value = moment().format("YYYY-MM-DD");
+		byId("admin-attendance-from").value = moment().subtract(30, "days").format("YYYY-MM-DD");
+	}
+	byId("admin-attendance-from")?.addEventListener("change", loadAdminAttendance);
+	byId("admin-attendance-to")?.addEventListener("change", loadAdminAttendance);
+	byId("admin-attendance-export")?.addEventListener("click", async () => {
+		try {
+			const rows = await api("hr_custom.api.portal_admin.get_attendance", {search: byId("admin-attendance-search").value, from_date: byId("admin-attendance-from").value, to_date: byId("admin-attendance-to").value, export: 1});
+			const columns = ["employee", "employee_name", "attendance_date", "status", "in_time", "out_time", "working_hours", "late_entry", "early_exit", "name"];
+			const csv = [columns, ...rows.map((row) => columns.map((key) => row[key] ?? ""))].map((line) => line.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
+			const link = document.createElement("a");
+			link.href = URL.createObjectURL(new Blob(["\ufeff", csv], {type: "text/csv;charset=utf-8"}));
+			link.download = `attendance-${byId("admin-attendance-from").value}-${byId("admin-attendance-to").value}.csv`;
+			link.click(); URL.revokeObjectURL(link.href);
+		} catch (error) { await showAppDialog({title: __("Could not export attendance"), message: error.message, icon: "!"}); }
+	});
+	byId("admin-create-employee")?.addEventListener("click", () => openAdminAction("employee"));
+	byId("admin-create-leave")?.addEventListener("click", () => openAdminAction("leave"));
+	byId("admin-create-allocation")?.addEventListener("click", () => openAdminAction("allocation"));
+	byId("admin-create-portal")?.addEventListener("click", () => openAdminAction("portal"));
+	byId("admin-action-close")?.addEventListener("click", () => closeSheet(byId("admin-action-sheet")));
+	byId("admin-action-form")?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const form = event.currentTarget, values = Object.fromEntries(new FormData(form));
+		if (adminAction === "portal" && values.password !== values.confirm_password) { await showAppDialog({title: __("Passwords do not match"), message: __("Nothing was changed."), icon: "!"}); return; }
+		const method = {employee: "create_employee", leave: "create_leave_application", allocation: "create_yearly_leave_allocation", portal: "create_employee_portal_access"}[adminAction];
+		if (adminAction === "portal") values.employee = adminEmployee.name;
+		if (adminAction === "leave") values.half_day = form.elements.half_day.checked ? 1 : 0;
+		delete values.confirm_password;
+		const button = form.querySelector("button[type=submit]"); button.disabled = true;
+		try {
+			const result = await api(`hr_custom.api.portal_admin.${method}`, adminAction === "employee" ? {values: JSON.stringify(values)} : values);
+			closeSheet(byId("admin-action-sheet"));
+			if (result.share) showCredentialShare(result.share);
+			if (adminAction === "employee") await loadAdminEmployees();
+			if (adminAction === "leave") await loadAdminLeaves();
+			if (adminAction === "portal") await openAdminEmployee(adminEmployee.name);
+			if (!result.share) await showAppDialog({title: __("Created successfully"), message: result.name || result.employee || __("The record was created."), icon: "✓"});
+		} catch (error) { await showAppDialog({title: __("Could not create record"), message: error.message, icon: "!"}); }
+		finally { button.disabled = false; }
+	});
+	byId("credential-share-close")?.addEventListener("click", () => closeSheet(byId("credential-share-sheet")));
+	byId("credential-copy")?.addEventListener("click", async () => {
+		const message = byId("credential-share-message").value;
+		try { await navigator.clipboard.writeText(message); }
+		catch (_) { byId("credential-share-message").select(); document.execCommand("copy"); }
+		await showAppDialog({title: __("Copied"), message: __("The login message was copied."), icon: "✓"});
+	});
 	["admin-employee-search", "admin-leave-search", "admin-attendance-search"].forEach((id) => byId(id)?.addEventListener("keydown", (event) => {
 		if (event.key !== "Enter") return;
 		event.preventDefault();
@@ -1150,6 +1242,7 @@ frappe.ready(() => {
 	});
 	byId("admin-reset-password")?.addEventListener("click", async () => {
 		if (!adminEmployee?.portal) return;
+		adminPasswordMode = "portal";
 		byId("admin-password-form").classList.remove("is-hidden");
 		byId("admin-new-password").focus();
 	});
@@ -1163,11 +1256,18 @@ frappe.ready(() => {
 		const password = byId("admin-new-password").value;
 		if (password !== byId("admin-confirm-password").value) { await showAppDialog({title: __("Passwords do not match"), message: __("The portal password was not changed."), icon: "!"}); return; }
 		try {
-			await api("hr_custom.api.portal_admin.set_employee_portal_password", {employee: adminEmployee.name, password});
+			const method = adminPasswordMode === "desk" ? "set_employee_desk_password" : "set_employee_portal_password";
+			const result = await api(`hr_custom.api.portal_admin.${method}`, {employee: adminEmployee.name, password});
 			byId("admin-password-form").reset();
 			byId("admin-password-form").classList.add("is-hidden");
-			await showAppDialog({title: __("Password changed"), message: __("The password was reset and all existing employee portal sessions were signed out."), icon: "✓"});
+			showCredentialShare(result.share);
 		} catch (error) { await showAppDialog({title: __("Could not reset password"), message: error.message, icon: "!"}); }
+	});
+	byId("admin-reset-desk-password")?.addEventListener("click", () => {
+		if (!adminEmployee?.user_id) return;
+		adminPasswordMode = "desk";
+		byId("admin-password-form").classList.remove("is-hidden");
+		byId("admin-new-password").focus();
 	});
 	byId("admin-toggle-portal")?.addEventListener("click", async () => {
 		if (!adminEmployee?.portal) return;
