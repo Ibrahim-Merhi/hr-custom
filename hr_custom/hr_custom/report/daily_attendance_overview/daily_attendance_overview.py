@@ -6,6 +6,7 @@ from datetime import timedelta
 import frappe
 from frappe import _
 from frappe.utils import get_first_day, get_last_day, getdate, nowdate
+from hr_custom.services.work_schedule import get_holiday_status, get_scheduled_period
 
 
 def execute(filters=None):
@@ -38,7 +39,14 @@ def execute(filters=None):
 		date = max(start, joined)
 		while date <= min(end, relieved):
 			day_logs = by_employee_date.get((employee.name, date), [])
-			status = "Present" if day_logs else "Absent"
+			# Presence starts at the first explicit clock-in. Employees do not need
+			# to clock out before appearing as present in today's live overview.
+			if any(row.log_type == "IN" for row in day_logs):
+				status = "Present"
+			else:
+				period = get_scheduled_period(employee.name, date)
+				is_working_day = period.get("working_hours", 0) > 0 and not get_holiday_status(employee.name, date)
+				status = "Absent" if is_working_day else "Non-working"
 			if status_filter in ("Present", "Absent") and status != status_filter:
 				date += timedelta(days=1)
 				continue
@@ -78,7 +86,11 @@ def _date_range(filters):
 
 
 def _employees(filters, start, end):
-	query_filters = {"status": "Active", "date_of_joining": ["<=", end]}
+	query_filters = {
+		"status": "Active",
+		"date_of_joining": ["<=", end],
+		"custom_is_payroll_identity": 0,
+	}
 	for field in ("company", "branch", "department"):
 		if filters.get(field):
 			query_filters[field] = filters[field]
