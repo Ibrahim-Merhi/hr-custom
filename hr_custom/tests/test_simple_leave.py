@@ -4,7 +4,9 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
+from hrms.hr.doctype.leave_application.leave_application import AttendanceAlreadyMarkedError
 
+from hr_custom.overrides.leave_application import HourlyLeaveApplication
 from hr_custom.services.simple_leave import calculate_leave_calendar, get_available_leave_types, get_employee_approvers, process_leave_approval, submit_simple_leave
 
 
@@ -12,7 +14,10 @@ class TestSimpleLeave(FrappeTestCase):
     def setUp(self):
         frappe.set_user("Administrator")
         self.user = "simple.leave.test@example.com"
-        self.employee = make_employee(self.user, company="_Test Company")
+        employee_kwargs = {}
+        if frappe.get_meta("Employee").has_field("custom_is_payroll_identity"):
+            employee_kwargs["custom_is_payroll_identity"] = 1
+        self.employee = make_employee(self.user, company="_Test Company", **employee_kwargs)
         self.leave_type = "_Test Simple Mobile Leave"
         self.hour_leave_type = "_Test Simple Mobile Hour Leave"
         self.employment_type = "_Test Simple Mobile Both"
@@ -83,6 +88,32 @@ class TestSimpleLeave(FrappeTestCase):
         self.assertEqual(application.half_day, 1)
         self.assertEqual(str(application.half_day_date), "2028-02-08")
         self.assertEqual(application.total_leave_days, 0.5)
+
+    def test_half_day_allows_present_attendance_on_half_day_date(self):
+        application = HourlyLeaveApplication({
+            "doctype": "Leave Application",
+            "employee": self.employee,
+            "from_date": "2028-02-08",
+            "to_date": "2028-02-08",
+            "half_day": 1,
+            "half_day_date": "2028-02-08",
+        })
+        with patch("frappe.db.sql", return_value=[]) as query:
+            application.validate_attendance()
+        self.assertEqual(str(query.call_args.args[1][3]), "2028-02-08")
+
+    def test_half_day_still_blocks_present_attendance_on_full_leave_date(self):
+        application = HourlyLeaveApplication({
+            "doctype": "Leave Application",
+            "employee": self.employee,
+            "from_date": "2028-02-08",
+            "to_date": "2028-02-09",
+            "half_day": 1,
+            "half_day_date": "2028-02-08",
+        })
+        with patch("frappe.db.sql", return_value=[("ATT-0001",)]):
+            with self.assertRaises(AttendanceAlreadyMarkedError):
+                application.validate_attendance()
 
     def test_partial_hour_request_uses_hour_allocation(self):
         result = submit_simple_leave("2028-02-08", "2028-02-08", "Appointment", "Hours", "Partial Hours", 2)

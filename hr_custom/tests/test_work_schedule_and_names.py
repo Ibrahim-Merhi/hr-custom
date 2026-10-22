@@ -8,7 +8,7 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 from hr_custom.hr_custom.doctype.weekly_work_schedule.weekly_work_schedule import assign_employees
 from hr_custom.hr_custom.report.weekly_employee_hours.weekly_employee_hours import _worked_hours
 from hr_custom.services.employee_name import apply_bilingual_name, arabic_to_english, english_to_arabic
-from hr_custom.services.work_schedule import get_employee_schedule
+from hr_custom.services.work_schedule import get_employee_schedule, get_scheduled_period
 
 
 class TestWorkScheduleAndNames(FrappeTestCase):
@@ -20,7 +20,14 @@ class TestWorkScheduleAndNames(FrappeTestCase):
         frappe.set_user("Administrator")
 
     def test_reusable_schedule_assignment_and_employee_override(self):
-        employee = make_employee("weekly.schedule.test@example.com", company="_Test Company")
+        # This test owns only the HR schedule. Marking the fixture as an internal
+        # payroll identity bypasses the accounting app's unrelated company table.
+        employee_kwargs = {}
+        if frappe.get_meta("Employee").has_field("custom_is_payroll_identity"):
+            employee_kwargs["custom_is_payroll_identity"] = 1
+        employee = make_employee(
+            "weekly.schedule.test@example.com", company="_Test Company", **employee_kwargs
+        )
         schedule = frappe.get_doc({
             "doctype": "Weekly Work Schedule", "schedule_name": "_Test Reusable Week",
             "working_hours": [
@@ -36,11 +43,19 @@ class TestWorkScheduleAndNames(FrappeTestCase):
 
         employee_doc = frappe.get_doc("Employee", employee)
         employee_doc.custom_use_custom_work_schedule = 1
-        employee_doc.append("custom_weekly_working_hours", {"day_of_week": "Tuesday", "working_hours": 5, "enabled": 1})
+        employee_doc.append("custom_weekly_working_hours", {
+            "day_of_week": "Tuesday", "working_hours": 5,
+            "from_time": "09:30:00", "to_time": "14:30:00", "enabled": 1,
+        })
         employee_doc.save()
         values, source = get_employee_schedule(employee)
         self.assertEqual(source, "Employee")
         self.assertEqual(values["Tuesday"], 5)
+        period = get_scheduled_period(employee, "2027-01-05")
+        self.assertEqual(period["source"], "Employee")
+        self.assertEqual(period["working_hours"], 5)
+        self.assertEqual(str(period["from_time"]), "9:30:00")
+        self.assertEqual(str(period["to_time"]), "14:30:00")
 
     def test_bilingual_name_parts_build_full_names(self):
         self.assertTrue(arabic_to_english("محمد علي"))

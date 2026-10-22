@@ -2,7 +2,10 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
-from hrms.hr.doctype.leave_application.leave_application import LeaveApplication
+from hrms.hr.doctype.leave_application.leave_application import (
+    AttendanceAlreadyMarkedError,
+    LeaveApplication,
+)
 from hrms.hr.doctype.leave_ledger_entry.leave_ledger_entry import create_leave_ledger_entry
 
 from hr_custom.services.hourly_leave import apply_calculation, validate_hour_balance
@@ -100,6 +103,35 @@ class HourlyLeaveApplication(LeaveApplication):
         self.total_leave_days = sum(1 for row in result["details"] if flt(row["leave_hours"]) > 0)
         self.leave_balance = self.custom_hour_balance_before
         validate_hour_balance(self)
+
+    def validate_attendance(self):
+        """Allow a checked-in employee to request leave for the other half-day.
+
+        HRMS normally rejects a Leave Application whenever a submitted Present
+        Attendance exists in the requested range. A Present record on the selected
+        half-day date is valid: approval changes that same Attendance to Half Day
+        and retains its punches and worked hours. Present records on any full-leave
+        date in a multi-day request remain blocking.
+        """
+        if not cint(self.half_day) or not self.half_day_date:
+            return super().validate_attendance()
+
+        attendance = frappe.db.sql(
+            """select name from `tabAttendance`
+                where employee = %s
+                  and attendance_date between %s and %s
+                  and attendance_date != %s
+                  and status = 'Present'
+                  and docstatus = 1""",
+            (self.employee, self.from_date, self.to_date, self.half_day_date),
+        )
+        if attendance:
+            frappe.throw(
+                _("Attendance for employee {0} is already marked for a full-leave day").format(
+                    self.employee
+                ),
+                AttendanceAlreadyMarkedError,
+            )
 
     def create_leave_ledger_entry(self, submit=True):
         if self.is_historical_migration():
