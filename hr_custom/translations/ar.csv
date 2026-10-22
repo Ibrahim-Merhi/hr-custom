@@ -190,10 +190,10 @@ Correction Requests,طلبات تصحيح الحضور,
 Request Correction,طلب تصحيح,
 ATTENDANCE CORRECTION,تصحيح الحضور,
 Correction Type,نوع التصحيح,
-Missing Check In,دخول مفقود,
-Missing Check Out,خروج مفقود,
-Wrong Check In,وقت دخول خاطئ,
-Wrong Check Out,وقت خروج خاطئ,
+Missing Check In,إضافة تسجيل دخول مفقود,
+Missing Check Out,إضافة تسجيل خروج مفقود,
+Wrong Check In,تصحيح وقت تسجيل الدخول,
+Wrong Check Out,تصحيح وقت تسجيل الخروج,
 Requested Check In,وقت الدخول المطلوب,
 Requested Check Out,وقت الخروج المطلوب,
 Submit for Approval,إرسال للموافقة,
@@ -227,7 +227,7 @@ Cancel,إلغاء,
 Close,إغلاق,
 Remarks,ملاحظات,
 Approval note,ملاحظة الموافقة,
-Other,أخرى,
+Other,تصحيح آخر,
 OK,حسناً,
 Attendance Correction,تصحيح الحضور,
 CORRECTION WORKFLOW,مسار تصحيح الحضور,
@@ -322,6 +322,14 @@ Your approval,موافقتك
 Your location is currently unavailable.,موقعك غير متاح حالياً.
 Your request was sent to the attendance approver.,تم إرسال طلبك إلى معتمد الحضور.
 hours,ساعات
+hours remaining,ساعة متبقية
+days remaining,يوم متبقٍ
+Report Missing Record,طلب تصحيح سجل الحضور
+"Forgot a punch? Send a correction request to HR.","إذا كان تسجيل الدخول أو الخروج مفقوداً أو غير صحيح، أرسل طلب تصحيح إلى الموارد البشرية."
+Attendance Correction Request,طلب تصحيح الحضور
+Time Format,تنسيق الوقت
+Choose how times appear in the portal,اختر طريقة عرض الوقت في البوابة
+Reason (optional for annual leave),السبب (اختياري للإجازة السنوية)
 Only English and Arabic are supported in the employee portal.,تدعم بوابة الموظف اللغتين الإنجليزية والعربية فقط.
 Draft,مسودة
 Pending,معلّق

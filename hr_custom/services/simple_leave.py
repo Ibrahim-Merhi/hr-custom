@@ -139,6 +139,11 @@ def validate_pending_leave_edit(doc, employee):
         frappe.throw(_("This leave request can no longer be edited because it is not waiting for an employee approver."))
 
 
+def _reason_is_required(leave_type):
+    """Annual leave is routine and may be submitted without a justification."""
+    return not str(leave_type or "").strip().casefold().startswith("annual leave")
+
+
 @frappe.whitelist(methods=["POST"])
 def update_pending_leave(
     name,
@@ -162,11 +167,11 @@ def update_pending_leave(
 
     start, end = getdate(from_date), getdate(to_date)
     reason = (reason or "").strip()
-    if not reason:
-        frappe.throw(_("Please enter the reason for your leave."))
     if end < start:
         frappe.throw(_("To Date cannot be before From Date."))
     leave_type = select_leave_type(employee.name, start, end, requested_leave_type=leave_type)
+    if _reason_is_required(leave_type) and not reason:
+        frappe.throw(_("Please enter the reason for your leave."))
     unit = get_leave_unit(leave_type)
     preview = calculate_leave_calendar(
         employee.name, leave_type, start, end, leave_duration, partial_hours, half_day
@@ -573,13 +578,13 @@ def submit_simple_leave(from_date, to_date, reason, leave_unit="Days", leave_dur
     reason = (reason or "").strip()
     if to_date < from_date:
         frappe.throw(_("To Date cannot be before From Date."))
-    if not reason:
-        frappe.throw(_("Please enter the reason for your leave."))
     approvers = get_employee_approvers(employee.name)
     if not approvers:
         frappe.throw(_("No leave approver is configured for your employee profile. Please contact HR."))
     unit = get_leave_unit(leave_type) if leave_type else (leave_unit if leave_unit in ("Days", "Hours") else None)
     leave_type = select_leave_type(employee.name, from_date, to_date, unit, leave_type)
+    if _reason_is_required(leave_type) and not reason:
+        frappe.throw(_("Please enter the reason for your leave."))
     unit = get_leave_unit(leave_type)
     preview = calculate_leave_calendar(employee.name, leave_type, from_date, to_date, leave_duration, partial_hours, half_day)
     is_half_day = cint(half_day) if unit == "Days" else 0

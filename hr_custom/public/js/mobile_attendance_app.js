@@ -56,7 +56,7 @@ frappe.ready(() => {
 		"Restore": "استعادة", "Delete": "حذف", "Announcement": "إعلان", "HR Update": "تحديث الموارد البشرية",
 		"No correction requested": "لم يتم طلب تصحيح", "No punches recorded": "لا توجد سجلات دخول أو خروج",
 		"Mobile GPS": "نظام تحديد الموقع", "IN": "دخول", "OUT": "خروج", "hours": "ساعات",
-		"hours available": "ساعات متاحة", "days available": "أيام متاحة", "Return to work": "العودة إلى العمل",
+		"hours available": "ساعات متاحة", "days available": "أيام متاحة", "hours remaining": "ساعة متبقية", "days remaining": "يوم متبقٍ", "Return to work": "العودة إلى العمل",
 		"Location not required": "الموقع غير مطلوب", "Your attendance policy allows check-in without GPS.": "تسمح سياسة الحضور الخاصة بك بتسجيل الدخول دون استخدام الموقع الجغرافي.",
 		"Log out?": "تسجيل الخروج؟", "Are you sure you want to log out of the Employee HR Portal?": "هل أنت متأكد من رغبتك في تسجيل الخروج من بوابة الموظف؟",
 		"Log Out": "تسجيل الخروج", "Request failed.": "تعذر إكمال الطلب.",
@@ -89,8 +89,10 @@ frappe.ready(() => {
 		"Your location is currently unavailable.": "موقعك غير متاح حالياً.", "The GPS request timed out. Move to an open area and retry.": "انتهت مهلة تحديد الموقع. انتقل إلى مكان مفتوح وحاول مجدداً.",
 		"Getting the required GPS accuracy…": "جارٍ الحصول على دقة الموقع المطلوبة…", "Checking GPS and branch geofence…": "جارٍ التحقق من الموقع ونطاق الفرع…",
 		"VALIDATING…": "جارٍ التحقق…", "Correction submitted": "تم إرسال طلب التصحيح",
-		"Report Missing Record": "الإبلاغ عن سجل مفقود", "Forgot a punch? Send a correction request to HR.": "هل نسيت تسجيل الدخول أو الخروج؟ أرسل طلب تصحيح إلى الموارد البشرية.",
-		"Attendance Date": "تاريخ الحضور", "Missing Check In": "تسجيل دخول مفقود", "Missing Check Out": "تسجيل خروج مفقود",
+		"Report Missing Record": "طلب تصحيح سجل الحضور", "Forgot a punch? Send a correction request to HR.": "إذا كان تسجيل الدخول أو الخروج مفقوداً أو غير صحيح، أرسل طلب تصحيح إلى الموارد البشرية.",
+		"Attendance Correction Request": "طلب تصحيح الحضور", "Attendance Date": "تاريخ الحضور", "Missing Check In": "إضافة تسجيل دخول مفقود", "Missing Check Out": "إضافة تسجيل خروج مفقود",
+		"Wrong Check In": "تصحيح وقت تسجيل الدخول", "Wrong Check Out": "تصحيح وقت تسجيل الخروج", "Other": "تصحيح آخر",
+		"Time Format": "تنسيق الوقت", "Choose how times appear in the portal": "اختر طريقة عرض الوقت في البوابة", "Reason (optional for annual leave)": "السبب (اختياري للإجازة السنوية)",
 		"Sending request…": "جارٍ إرسال الطلب…", "Your request was sent to HR.": "تم إرسال طلبك إلى الموارد البشرية.",
 		"Refreshing…": "جارٍ التحديث…", "Updated": "تم التحديث", "Refresh": "تحديث",
 		"Outside the allowed work location": "أنت خارج نطاق العمل المسموح",
@@ -130,6 +132,16 @@ frappe.ready(() => {
 		const date = moment(value).toDate();
 		return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(isArabic ? "ar-LB" : "en-US", options).format(date);
 	};
+	const uses12HourTime = () => (localStorage.getItem("hr_portal_time_format") || "24") === "12";
+	const portalTime = (value, includeSeconds = false) => {
+		let time = moment(value);
+		if (typeof value === "string" && /^\d{1,2}:\d{2}/.test(value)) time = moment(value, ["HH:mm:ss", "HH:mm"], true);
+		if (!time.isValid()) return "—";
+		let formatted = time.format(uses12HourTime() ? (includeSeconds ? "h:mm:ss A" : "h:mm A") : (includeSeconds ? "HH:mm:ss" : "HH:mm"));
+		if (isArabic) formatted = formatted.replace("AM", "ص").replace("PM", "م");
+		return formatted;
+	};
+	const portalDateTime = (value) => `${portalDate(value, {day: "numeric", month: "short", year: "numeric"})} ${portalTime(value)}`;
 	const relativeTime = (value) => {
 		const seconds = Math.round((moment(value).valueOf() - Date.now()) / 1000);
 		const units = [["year", 31536000], ["month", 2592000], ["day", 86400], ["hour", 3600], ["minute", 60]];
@@ -208,7 +220,7 @@ frappe.ready(() => {
 		clearInterval(clockTimer);
 		const render = () => {
 			const now = moment(Date.now() + clockOffset);
-			setText("server-clock", now.format("HH:mm:ss"));
+			setText("server-clock", portalTime(now, true));
 			setText("server-date", portalDate(now, {weekday: "long", day: "numeric", month: "long", year: "numeric"}));
 		};
 		render();
@@ -228,7 +240,7 @@ frappe.ready(() => {
 		setText("action-label", value.next_action === "IN" ? __("CLOCK IN") : __("CLOCK OUT"));
 		byId("action")?.classList.toggle("out", value.next_action === "OUT");
 		byId("report-missing-attendance")?.classList.toggle("is-hidden", !value.allow_employee_correction_request);
-		setText("last-checkin", value.last_checkin ? `${value.last_checkin.log_type} · ${moment(value.last_checkin.time).format("HH:mm")}` : __("No action today"));
+		setText("last-checkin", value.last_checkin ? `${value.last_checkin.log_type} · ${portalTime(value.last_checkin.time)}` : __("No action today"));
 		document.querySelectorAll(".bottom-tabs [data-tab]").forEach((tab) => {
 			const name = tab.dataset.tab;
 			if (name === "approvals") return;
@@ -386,7 +398,7 @@ frappe.ready(() => {
 	function renderAttendanceHistory() {
 		const container = byId("attendance-history");
 		const rows = attendanceFilter === "all" ? attendanceRows : attendanceRows.filter((row) => row.category === attendanceFilter);
-		container.innerHTML = rows.length ? rows.map((row) => `<div class="history-row" data-attendance-date="${frappe.utils.escape_html(String(row.attendance_date))}" data-category="${frappe.utils.escape_html(row.category || "abnormal")}"><span class="history-kind">${frappe.utils.escape_html(__(row.status || "—"))}</span><div><strong>${portalDate(row.attendance_date, {weekday: "short", day: "numeric", month: "short"})}</strong><div class="history-meta">${row.in_time ? moment(row.in_time).format("HH:mm") : "—"} – ${row.out_time ? moment(row.out_time).format("HH:mm") : "—"}</div>${row.correction_status ? `<span class="correction-status">${frappe.utils.escape_html(__(row.correction_status))}</span>` : ""}</div><strong>${Number(row.working_hours || 0).toFixed(1)}h</strong></div>`).join("") : `<div class="history-loading">${__("No attendance found for this filter.")}</div>`;
+		container.innerHTML = rows.length ? rows.map((row) => `<div class="history-row" data-attendance-date="${frappe.utils.escape_html(String(row.attendance_date))}" data-category="${frappe.utils.escape_html(row.category || "abnormal")}"><span class="history-kind">${frappe.utils.escape_html(__(row.status || "—"))}</span><div><strong>${portalDate(row.attendance_date, {weekday: "short", day: "numeric", month: "short"})}</strong><div class="history-meta">${row.in_time ? portalTime(row.in_time) : "—"} – ${row.out_time ? portalTime(row.out_time) : "—"}</div>${row.correction_status ? `<span class="correction-status">${frappe.utils.escape_html(__(row.correction_status))}</span>` : ""}</div><strong>${Number(row.working_hours || 0).toFixed(1)}h</strong></div>`).join("") : `<div class="history-loading">${__("No attendance found for this filter.")}</div>`;
 		container.querySelectorAll("[data-attendance-date]").forEach((row) => row.onclick = () => openAttendanceDetail(row.dataset.attendanceDate, row.dataset.category));
 	}
 
@@ -414,9 +426,9 @@ frappe.ready(() => {
 			const field = (label, value) => `<div class="leave-detail-field"><span>${label}</span><strong>${frappe.utils.escape_html(String(value || "—"))}</strong></div>`;
 			const attendance = data.attendance || {};
 			const schedule = data.schedule || {};
-			const workPeriod = schedule.from_time && schedule.to_time ? `${String(schedule.from_time).slice(0, 5)} – ${String(schedule.to_time).slice(0, 5)}` : "—";
+			const workPeriod = schedule.from_time && schedule.to_time ? `${portalTime(String(schedule.from_time))} – ${portalTime(String(schedule.to_time))}` : "—";
 			const pendingReason = !attendance.name && category === "abnormal" ? (schedule.complete ? `${__("Recorded hours do not yet meet the required hours.")} (${formatNumber(Number(schedule.recorded_hours || 0).toFixed(2))}/${formatNumber(Number(schedule.working_hours || 0).toFixed(2))})` : __("A complete check-in and check-out pair is required.")) : null;
-			container.innerHTML = field(__("Status"), __(attendance.status || (category === "abnormal" ? "Abnormal / Pending" : "—"))) + (pendingReason ? field(__("Why it is pending"), pendingReason) : "") + field(__("Scheduled Work Period"), workPeriod) + field(__("Required Hours"), `${formatNumber(Number(schedule.working_hours || 0).toFixed(2))} ${__("hours")}`) + field(__("Recorded Hours"), `${formatNumber(Number(attendance.working_hours || schedule.recorded_hours || 0).toFixed(2))} ${__("hours")}`) + field(__("Shift"), __(attendance.shift || schedule.shift || "—")) + `<div class="leave-detail-field"><span>${__("Punches")}</span>${data.punches.length ? data.punches.map((punch) => `<div class="approval-step"><strong><bdi>${frappe.utils.escape_html(__(punch.log_type || "—"))} · ${moment(punch.time).format("HH:mm:ss")}</bdi></strong><b>${frappe.utils.escape_html(__(punch.custom_checkin_source || punch.shift || ""))}</b></div>`).join("") : `<strong>${__("No punches recorded")}</strong>`}</div>` + `<div class="leave-detail-field"><span>${__("Correction Requests")}</span>${data.corrections.length ? data.corrections.map((row) => `<button type="button" class="correction-link" data-correction="${frappe.utils.escape_html(row.name)}">${frappe.utils.escape_html(__(row.request_type))} · ${frappe.utils.escape_html(__(row.approval_stage || row.status))}</button>`).join("") : `<strong>${__("No correction requested")}</strong>`}</div>`;
+			container.innerHTML = field(__("Status"), __(attendance.status || (category === "abnormal" ? "Abnormal / Pending" : "—"))) + (pendingReason ? field(__("Why it is pending"), pendingReason) : "") + field(__("Scheduled Work Period"), workPeriod) + field(__("Required Hours"), `${formatNumber(Number(schedule.working_hours || 0).toFixed(2))} ${__("hours")}`) + field(__("Recorded Hours"), `${formatNumber(Number(attendance.working_hours || schedule.recorded_hours || 0).toFixed(2))} ${__("hours")}`) + field(__("Shift"), __(attendance.shift || schedule.shift || "—")) + `<div class="leave-detail-field"><span>${__("Punches")}</span>${data.punches.length ? data.punches.map((punch) => `<div class="approval-step"><strong><bdi>${frappe.utils.escape_html(__(punch.log_type || "—"))} · ${portalTime(punch.time, true)}</bdi></strong><b>${frappe.utils.escape_html(__(punch.custom_checkin_source || punch.shift || ""))}</b></div>`).join("") : `<strong>${__("No punches recorded")}</strong>`}</div>` + `<div class="leave-detail-field"><span>${__("Correction Requests")}</span>${data.corrections.length ? data.corrections.map((row) => `<button type="button" class="correction-link" data-correction="${frappe.utils.escape_html(row.name)}">${frappe.utils.escape_html(__(row.request_type))} · ${frappe.utils.escape_html(__(row.approval_stage || row.status))}</button>`).join("") : `<strong>${__("No correction requested")}</strong>`}</div>`;
 			container.querySelectorAll("[data-correction]").forEach((button) => button.onclick = () => openCorrectionDetail(button.dataset.correction));
 			byId("open-correction-request").classList.toggle("is-hidden", category !== "abnormal" || data.corrections.some((row) => !["Rejected", "Applied"].includes(row.status)));
 		} catch (error) { container.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
@@ -544,7 +556,7 @@ frappe.ready(() => {
 			currentCorrectionContext = row.context || {};
 			setText("correction-detail-title", row.request_type || __("Attendance Correction"));
 			const field = (label, value) => `<div class="leave-detail-field"><span>${label}</span><strong>${frappe.utils.escape_html(String(value || "—"))}</strong></div>`;
-			container.innerHTML = field(__("Employee"), row.employee_name || row.employee) + field(__("Date"), moment(row.attendance_date).format("D MMMM YYYY")) + field(__("Status"), row.stage || row.status) + field(__("Requested Check In"), row.requested_check_in_time ? moment(row.requested_check_in_time).format("D MMM YYYY HH:mm") : "—") + field(__("Requested Check Out"), row.requested_check_out_time ? moment(row.requested_check_out_time).format("D MMM YYYY HH:mm") : "—") + field(__("Reason"), row.reason) + (row.hr_override_note ? field(__("HR Override Note"), row.hr_override_note) : "") + `<div class="leave-detail-field"><span>${__("Approval Progress")}</span>${(row.steps || []).map((step) => `<div class="approval-step"><strong>${frappe.utils.escape_html(step.approver_name || step.approver)}</strong><b>${frappe.utils.escape_html(step.status)}</b></div>`).join("") || `<strong>${__("Waiting for HR")}</strong>`}</div>`;
+			container.innerHTML = field(__("Employee"), row.employee_name || row.employee) + field(__("Date"), portalDate(row.attendance_date, {day: "numeric", month: "long", year: "numeric"})) + field(__("Status"), __(row.stage || row.status)) + field(__("Requested Check In"), row.requested_check_in_time ? portalDateTime(row.requested_check_in_time) : "—") + field(__("Requested Check Out"), row.requested_check_out_time ? portalDateTime(row.requested_check_out_time) : "—") + field(__("Reason"), row.reason) + (row.hr_override_note ? field(__("HR Override Note"), row.hr_override_note) : "") + `<div class="leave-detail-field"><span>${__("Approval Progress")}</span>${(row.steps || []).map((step) => `<div class="approval-step"><strong>${frappe.utils.escape_html(step.approver_name || step.approver)}</strong><b>${frappe.utils.escape_html(__(step.status))}</b></div>`).join("") || `<strong>${__("Waiting for HR")}</strong>`}</div>`;
 			const canAct = allowAction && row.context?.can_act;
 			byId("correction-detail-actions").classList.toggle("is-hidden", !canAct);
 			byId("correction-override-help").classList.toggle("is-hidden", !row.context?.is_hr_override);
@@ -618,6 +630,7 @@ frappe.ready(() => {
 	async function loadProfile() {
 		if (loadedSections.has("profile")) return;
 		document.querySelectorAll("[data-language]").forEach((button) => button.classList.toggle("active", button.dataset.language === (isArabic ? "ar" : "en")));
+		document.querySelectorAll("[data-time-format]").forEach((button) => button.classList.toggle("active", button.dataset.timeFormat === (uses12HourTime() ? "12" : "24")));
 		applyTheme(localStorage.getItem("hr_portal_theme") || "light");
 		try {
 			const row = await api("hr_custom.api.mobile_attendance.get_profile_data");
@@ -729,7 +742,7 @@ frappe.ready(() => {
 				fields.innerHTML = `<label>${__("First Name")}<input name="first_name" required></label><label>${__("Last Name")}<input name="last_name"></label><label>${__("Gender")}<select name="gender" required><option value="Male">${__("Male")}</option><option value="Female">${__("Female")}</option></select></label><div class="date-grid"><label>${__("Date of Birth")}<input type="date" name="date_of_birth" required></label><label>${__("Date of Joining")}<input type="date" name="date_of_joining" required></label></div><label>${__("Company")}<input name="company" required></label><label>${__("Branch")}<input name="branch" required></label><label>${__("Department")}<input name="department"></label><label>${__("Phone")}<input name="cell_number" type="tel"></label>`;
 			} else if (action === "leave") {
 				setText("admin-action-title", __("Leave for Employee"));
-				fields.innerHTML = `<label>${__("Employee")}<select name="employee" required>${employees}</select></label><label>${__("Leave Type")}<select name="leave_type" required>${leaveTypes}</select></label><div class="date-grid"><label>${__("From Date")}<input type="date" name="from_date" required></label><label>${__("To Date")}<input type="date" name="to_date" required></label></div><label class="half-day-option"><input type="checkbox" name="half_day"><span>${__("Half Day")}</span></label><label>${__("Reason")}<textarea name="reason" rows="4" required></textarea></label>`;
+				fields.innerHTML = `<label>${__("Employee")}<select name="employee" required>${employees}</select></label><label>${__("Leave Type")}<select name="leave_type" required>${leaveTypes}</select></label><div class="date-grid"><label>${__("From Date")}<input type="date" name="from_date" required></label><label>${__("To Date")}<input type="date" name="to_date" required></label></div><label class="half-day-option"><input type="checkbox" name="half_day"><span>${__("Half Day")}</span></label><label>${__("Reason (optional for annual leave)")}<textarea name="reason" rows="4"></textarea></label>`;
 			} else if (action === "allocation") {
 				setText("admin-action-title", __("Yearly Leave Allocation"));
 				const year = moment().year();
@@ -785,7 +798,7 @@ frappe.ready(() => {
 		try {
 			const rows = await api("hr_custom.api.portal_admin.get_attendance", {search: byId("admin-attendance-search").value, from_date: byId("admin-attendance-from").value, to_date: byId("admin-attendance-to").value, status: adminAttendanceStatus, page_length: 200});
 			const cell = (label, value, className = "") => `<div class="admin-attendance-cell ${className}" data-label="${frappe.utils.escape_html(label)}">${value}</div>`;
-			container.innerHTML = rows.length ? `<div class="admin-results-heading"><span>${__("Attendance records")}</span><b>${rows.length}</b></div><div class="admin-attendance-table" role="table"><div class="admin-attendance-tr admin-attendance-head" role="row"><div>${__("Employee")}</div><div>${__("Date")}</div><div>${__("Status")}</div><div>${__("In")}</div><div>${__("Out")}</div><div>${__("Hours")}</div></div>${rows.map((row) => `<div class="admin-attendance-tr" role="row">${cell(__("Employee"), `<strong>${frappe.utils.escape_html(row.employee_name || row.employee)}</strong><small>${frappe.utils.escape_html(row.employee)}</small>`, "employee")}${cell(__("Date"), portalDate(row.attendance_date))}${cell(__("Status"), `<span class="admin-status ${row.status === "Present" ? "is-success" : row.status === "Absent" ? "is-danger" : "is-warning"}">${frappe.utils.escape_html(__(row.status))}</span>`)}${cell(__("In"), row.in_time ? moment(row.in_time).format("HH:mm") : "—")}${cell(__("Out"), row.out_time ? moment(row.out_time).format("HH:mm") : "—")}${cell(__("Hours"), `${formatNumber(row.working_hours)}${Number(row.late_entry) ? `<i>${__("Late")}</i>` : ""}${Number(row.early_exit) ? `<i>${__("Early")}</i>` : ""}`)}</div>`).join("")}</div>` : `<div class="admin-empty"><b>${adminIcon("attendance")}</b><strong>${__("No attendance records found")}</strong><span>${__("Adjust the date range, status, or employee search.")}</span></div>`;
+			container.innerHTML = rows.length ? `<div class="admin-results-heading"><span>${__("Attendance records")}</span><b>${rows.length}</b></div><div class="admin-attendance-table" role="table"><div class="admin-attendance-tr admin-attendance-head" role="row"><div>${__("Employee")}</div><div>${__("Date")}</div><div>${__("Status")}</div><div>${__("In")}</div><div>${__("Out")}</div><div>${__("Hours")}</div></div>${rows.map((row) => `<div class="admin-attendance-tr" role="row">${cell(__("Employee"), `<strong>${frappe.utils.escape_html(row.employee_name || row.employee)}</strong><small>${frappe.utils.escape_html(row.employee)}</small>`, "employee")}${cell(__("Date"), portalDate(row.attendance_date))}${cell(__("Status"), `<span class="admin-status ${row.status === "Present" ? "is-success" : row.status === "Absent" ? "is-danger" : "is-warning"}">${frappe.utils.escape_html(__(row.status))}</span>`)}${cell(__("In"), row.in_time ? portalTime(row.in_time) : "—")}${cell(__("Out"), row.out_time ? portalTime(row.out_time) : "—")}${cell(__("Hours"), `${formatNumber(row.working_hours)}${Number(row.late_entry) ? `<i>${__("Late")}</i>` : ""}${Number(row.early_exit) ? `<i>${__("Early")}</i>` : ""}`)}</div>`).join("")}</div>` : `<div class="admin-empty"><b>${adminIcon("attendance")}</b><strong>${__("No attendance records found")}</strong><span>${__("Adjust the date range, status, or employee search.")}</span></div>`;
 		} catch (error) { container.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
 	}
 
@@ -1067,6 +1080,9 @@ frappe.ready(() => {
 	function updateSelectedLeaveType() {
 		const option = byId("leave-type").selectedOptions[0];
 		byId("leave-unit").value = option?.dataset.unit || "Days";
+		const annualLeave = /^annual leave(?:\s*-|$)/i.test(byId("leave-type").value.trim());
+		byId("leave-reason").required = !annualLeave;
+		setText("leave-reason-label", annualLeave ? __("Reason (optional for annual leave)") : __("Reason"));
 		updateHourlyFields();
 	}
 	async function previewLeave(previewSequence = ++leavePreviewSequence) {
@@ -1367,6 +1383,13 @@ frappe.ready(() => {
 	document.querySelectorAll("[data-theme-option]").forEach((button) => button.addEventListener("click", () => {
 		if (button.classList.contains("active")) return;
 		applyTheme(button.dataset.themeOption, true);
+	}));
+	document.querySelectorAll("[data-time-format]").forEach((button) => button.addEventListener("click", () => {
+		localStorage.setItem("hr_portal_time_format", button.dataset.timeFormat);
+		document.querySelectorAll("[data-time-format]").forEach((item) => item.classList.toggle("active", item === button));
+		if (status?.server_time) renderStatus(status);
+		historyLoaded = false;
+		loadedSections.delete("admin-attendance");
 	}));
 	document.querySelectorAll("[data-language]").forEach((button) => button.addEventListener("click", async () => {
 		if (button.classList.contains("active")) return;

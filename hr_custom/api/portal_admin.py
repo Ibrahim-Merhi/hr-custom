@@ -259,11 +259,11 @@ def create_leave_application(employee, leave_type, from_date, to_date, reason, h
 	start, end = getdate(from_date), getdate(to_date)
 	if end < start:
 		frappe.throw(_("To Date cannot be before From Date."))
-	if not (reason or "").strip():
+	if not str(leave_type or "").strip().casefold().startswith("annual leave") and not (reason or "").strip():
 		frappe.throw(_("Please enter the reason for the leave."))
 	preview = calculate_leave_calendar(employee, leave_type, start, end, None, None, cint(half_day))
 	defaults = get_leave_application_employee_defaults(employee)
-	doc = frappe.get_doc({"doctype": "Leave Application", "employee": employee, "company": defaults["company"], "leave_type": leave_type, "from_date": start, "to_date": end, "half_day": cint(half_day), "half_day_date": start if cint(half_day) else None, "posting_date": nowdate(), "description": reason.strip(), "leave_approver": defaults["leave_approver"], "status": "Open"})
+	doc = frappe.get_doc({"doctype": "Leave Application", "employee": employee, "company": defaults["company"], "leave_type": leave_type, "from_date": start, "to_date": end, "half_day": cint(half_day), "half_day_date": start if cint(half_day) else None, "posting_date": nowdate(), "description": (reason or "").strip(), "leave_approver": defaults["leave_approver"], "status": "Open"})
 	with run_portal_document_as_system_user():
 		doc.flags.skip_standard_leave_notification = True
 		doc.insert(ignore_permissions=True, ignore_links=True)

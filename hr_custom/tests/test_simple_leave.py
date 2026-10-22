@@ -7,7 +7,7 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 from hrms.hr.doctype.leave_application.leave_application import AttendanceAlreadyMarkedError
 
 from hr_custom.overrides.leave_application import HourlyLeaveApplication
-from hr_custom.services.simple_leave import calculate_leave_calendar, get_available_leave_types, get_employee_approvers, process_leave_approval, submit_simple_leave
+from hr_custom.services.simple_leave import _reason_is_required, calculate_leave_calendar, get_available_leave_types, get_employee_approvers, process_leave_approval, submit_simple_leave
 
 
 class TestSimpleLeave(FrappeTestCase):
@@ -138,3 +138,8 @@ class TestSimpleLeave(FrappeTestCase):
             submit_simple_leave("2028-02-08", "2028-02-07", "Wrong dates")
         with self.assertRaises(frappe.ValidationError):
             submit_simple_leave("2028-02-06", "2028-02-07", "")
+
+    def test_reason_is_optional_only_for_annual_leave(self):
+        self.assertFalse(_reason_is_required("Annual Leave"))
+        self.assertFalse(_reason_is_required("Annual Leave - Days"))
+        self.assertTrue(_reason_is_required("Sick Leave - Days"))
