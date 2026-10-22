@@ -30,6 +30,9 @@ frappe.ui.form.on("Leave Application", {
 function apply_leave_form_ui(frm) {
 	frm.toggle_display("custom_legacy_leave_section", false);
 	frm.toggle_display("sb_other_details", false);
+	frm.toggle_display("leave_approver", false);
+	frm.toggle_display("leave_approver_name", false);
+	frm.toggle_display("follow_via_email", false);
 	frm.set_df_property("company", "read_only", 1);
 	frm.set_df_property("leave_approver", "read_only", 1);
 }

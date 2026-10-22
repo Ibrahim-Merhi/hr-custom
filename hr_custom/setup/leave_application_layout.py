@@ -92,4 +92,8 @@ def apply_leave_application_layout():
     _set_property("sb_other_details", "hidden", 1, "Check")
     _set_property("company", "read_only", 1, "Check")
     _set_property("leave_approver", "read_only", 1, "Check")
+    _set_property("leave_approver", "hidden", 1, "Check")
+    _set_property("leave_approver_name", "hidden", 1, "Check")
+    _set_property("follow_via_email", "hidden", 1, "Check")
+    _set_property("section_break_7", "label", "Request Status", "Data")
     frappe.clear_cache(doctype="Leave Application")
