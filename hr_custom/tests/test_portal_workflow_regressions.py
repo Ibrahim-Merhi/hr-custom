@@ -6,7 +6,7 @@ from unittest.mock import patch
 import frappe
 
 from hr_custom.api import mobile_attendance, portal_admin, portal_auth
-from hr_custom.services import attendance_correction, portal_identity, simple_leave, workspace_cards
+from hr_custom.services import attendance_correction, portal_identity, simple_leave, work_schedule, workspace_cards
 
 
 class TestPortalImpersonationSecurity(unittest.TestCase):
@@ -242,6 +242,60 @@ class TestHRWorkspaceCards(unittest.TestCase):
         self.assertEqual(filters["status"], "Active")
         self.assertEqual(filters["custom_is_payroll_identity"], 0)
         self.assertNotIn("company", result["route_options"])
+
+    def test_absent_card_uses_schedule_aware_status(self):
+        statuses = {"EARLY": "Scheduled", "ABSENT": "Absent", "OFF": "Non-working"}
+        with (
+            patch.object(workspace_cards, "_active_employee_names", return_value=list(statuses)),
+            patch.object(workspace_cards, "_present_employee_names", return_value={"PRESENT"}),
+            patch.object(
+                workspace_cards,
+                "get_unpunched_attendance_status",
+                side_effect=lambda employee, *_: statuses[employee],
+            ),
+        ):
+            result = workspace_cards.absent_today()
+
+        self.assertEqual(result["value"], 1)
+
+
+class TestScheduleAwareAbsence(unittest.TestCase):
+    def _status(self, hours, start, current, holiday=False):
+        with (
+            patch.object(
+                work_schedule,
+                "get_scheduled_period",
+                return_value={"working_hours": hours, "from_time": start},
+            ),
+            patch.object(work_schedule, "get_holiday_status", return_value=holiday),
+        ):
+            return work_schedule.get_unpunched_attendance_status(
+                "HR-EMP-00001", date(2026, 10, 22), current
+            )
+
+    def test_employee_is_not_absent_before_scheduled_start(self):
+        self.assertEqual(
+            self._status(8, "12:00:00", datetime(2026, 10, 22, 10, 0)),
+            "Scheduled",
+        )
+
+    def test_employee_is_absent_after_scheduled_start(self):
+        self.assertEqual(
+            self._status(8, "12:00:00", datetime(2026, 10, 22, 12, 1)),
+            "Absent",
+        )
+
+    def test_zero_hour_day_is_not_absent(self):
+        self.assertEqual(
+            self._status(0, None, datetime(2026, 10, 22, 18, 0)),
+            "Non-working",
+        )
+
+    def test_holiday_is_not_absent(self):
+        self.assertEqual(
+            self._status(8, "08:00:00", datetime(2026, 10, 22, 18, 0), holiday=True),
+            "Non-working",
+        )
 
 
 class TestAttendanceCorrectionRouting(unittest.TestCase):

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate
+from frappe.utils import flt, get_datetime, getdate, now_datetime
 from hrms.hr.utils import get_holiday_dates_for_employee
 
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -148,6 +148,27 @@ def get_scheduled_period(employee: str, date) -> dict:
                 "source": source,
             }
     return {"working_hours": 0, "from_time": None, "to_time": None, "source": None}
+
+
+def get_unpunched_attendance_status(employee: str, attendance_date, current_datetime=None) -> str:
+    """Classify a day with no IN punch without declaring absence too early."""
+    attendance_date = getdate(attendance_date)
+    period = get_scheduled_period(employee, attendance_date)
+    if flt(period.get("working_hours"), 2) <= 0 or get_holiday_status(employee, attendance_date):
+        return "Non-working"
+
+    current = get_datetime(current_datetime or now_datetime())
+    if attendance_date < getdate(current):
+        return "Absent"
+    if attendance_date > getdate(current):
+        return "Scheduled"
+
+    # Without a configured start time there is no defensible point during the
+    # current day at which the employee can be called absent.
+    if not period.get("from_time"):
+        return "Scheduled"
+    scheduled_start = datetime.combine(attendance_date, time.min) + _as_timedelta(period["from_time"])
+    return "Absent" if current >= scheduled_start else "Scheduled"
 
 
 def _revision_schedule(employee: str, date=None, include_period=False):

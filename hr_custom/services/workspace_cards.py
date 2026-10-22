@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import timedelta
 
 import frappe
-from frappe.utils import getdate, nowdate
+from frappe.utils import getdate, now_datetime, nowdate
+
+from hr_custom.services.work_schedule import get_unpunched_attendance_status
 
 
 COMPANY = "Itihad"
@@ -53,8 +55,15 @@ def present_today(filters=None):
 
 @frappe.whitelist()
 def absent_today(filters=None):
-    active = set(_active_employee_names())
-    value = len(active - _present_employee_names())
+    today = getdate(nowdate())
+    present = _present_employee_names(today)
+    current = now_datetime()
+    value = sum(
+        1
+        for employee in _active_employee_names(today)
+        if employee not in present
+        and get_unpunched_attendance_status(employee, today, current) == "Absent"
+    )
     return _result(value, ["query-report", "Daily Attendance Overview"], {"period_type": "Day", "date": nowdate(), "attendance_status": "Absent", "company": COMPANY})
 
 

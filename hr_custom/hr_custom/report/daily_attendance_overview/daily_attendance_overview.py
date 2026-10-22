@@ -5,8 +5,8 @@ from datetime import timedelta
 
 import frappe
 from frappe import _
-from frappe.utils import get_first_day, get_last_day, getdate, nowdate
-from hr_custom.services.work_schedule import get_holiday_status, get_scheduled_period
+from frappe.utils import get_first_day, get_last_day, getdate, now_datetime, nowdate
+from hr_custom.services.work_schedule import get_unpunched_attendance_status
 
 
 def execute(filters=None):
@@ -32,6 +32,7 @@ def execute(filters=None):
 		by_employee_date[(log.employee, getdate(log.time))].append(log)
 
 	status_filter = filters.get("attendance_status") or "All"
+	current_datetime = now_datetime()
 	rows = []
 	for employee in employees:
 		joined = getdate(employee.date_of_joining) if employee.date_of_joining else start
@@ -44,10 +45,8 @@ def execute(filters=None):
 			if any(row.log_type == "IN" for row in day_logs):
 				status = "Present"
 			else:
-				period = get_scheduled_period(employee.name, date)
-				is_working_day = period.get("working_hours", 0) > 0 and not get_holiday_status(employee.name, date)
-				status = "Absent" if is_working_day else "Non-working"
-			if status_filter in ("Present", "Absent") and status != status_filter:
+				status = get_unpunched_attendance_status(employee.name, date, current_datetime)
+			if status_filter != "All" and status != status_filter:
 				date += timedelta(days=1)
 				continue
 			ins = [row.time for row in day_logs if row.log_type == "IN"]
