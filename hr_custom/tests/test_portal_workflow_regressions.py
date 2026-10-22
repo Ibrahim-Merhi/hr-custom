@@ -6,7 +6,7 @@ from unittest.mock import patch
 import frappe
 
 from hr_custom.api import mobile_attendance, portal_admin, portal_auth
-from hr_custom.services import attendance_correction, portal_identity, simple_leave
+from hr_custom.services import attendance_correction, portal_identity, simple_leave, workspace_cards
 
 
 class TestPortalImpersonationSecurity(unittest.TestCase):
@@ -226,6 +226,22 @@ class TestMobileClockState(unittest.TestCase):
 
         self.assertEqual(action, "IN")
         self.assertIsNone(source)
+
+
+class TestHRWorkspaceCards(unittest.TestCase):
+    def test_active_employee_card_is_not_limited_to_one_company(self):
+        database = SimpleNamespace(count=lambda *args, **kwargs: 172)
+        with (
+            patch.object(workspace_cards.frappe, "db", database),
+            patch.object(database, "count", wraps=database.count) as count,
+        ):
+            result = workspace_cards.active_employees()
+
+        filters = count.call_args.args[1]
+        self.assertNotIn("company", filters)
+        self.assertEqual(filters["status"], "Active")
+        self.assertEqual(filters["custom_is_payroll_identity"], 0)
+        self.assertNotIn("company", result["route_options"])
 
 
 class TestAttendanceCorrectionRouting(unittest.TestCase):

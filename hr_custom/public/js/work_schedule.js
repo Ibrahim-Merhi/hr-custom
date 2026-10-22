@@ -21,13 +21,20 @@ async function employee_leave_mode(frm) {
 	if (frm.doc.custom_leave_calculation_mode_override) {
 		return frm.doc.custom_leave_calculation_mode_override;
 	}
-	if (!frm.doc.employment_type) return "Days";
+	const employmentType = employee_employment_type(frm);
+	if (!employmentType) return "Days";
 	const result = await frappe.db.get_value(
 		"Employment Type",
-		frm.doc.employment_type,
+		employmentType,
 		["custom_leave_calculation_mode", "custom_weekly_work_schedule"],
 	);
 	return result.message?.custom_leave_calculation_mode || "Days";
+}
+
+function employee_employment_type(frm) {
+	return frm.doc.employment_type
+		|| (frm.doc.custom_branches || []).find((row) => !row.left_position)?.employment_type
+		|| "";
 }
 
 async function copy_schedule_rows(frm, scheduleName) {
@@ -45,12 +52,13 @@ async function copy_schedule_rows(frm, scheduleName) {
 
 async function configure_employee_schedule(frm, initialize = false) {
 	const mode = await employee_leave_mode(frm);
-	const hourly = ["Hours", "Both"].includes(mode);
-	frm.toggle_display("custom_work_schedule_section", hourly);
+	const employmentType = String(employee_employment_type(frm)).trim().toLowerCase().replace(/[-_]+/g, " ");
+	const scheduleEnabled = ["Hours", "Both"].includes(mode) || employmentType === "full time";
+	frm.toggle_display("custom_work_schedule_section", scheduleEnabled);
 	["custom_weekly_work_schedule", "custom_use_custom_work_schedule", "custom_weekly_working_hours"]
 		.forEach((fieldname) => frm.toggle_display(fieldname, false));
-	if (hourly && !frm.is_new()) await render_work_schedule_workspace(frm);
-	if (hourly && initialize) frm.scroll_to_field("custom_work_schedule_section");
+	if (scheduleEnabled && !frm.is_new()) await render_work_schedule_workspace(frm);
+	if (scheduleEnabled && initialize) frm.scroll_to_field("custom_work_schedule_section");
 }
 
 function schedule_time(value) {
@@ -191,5 +199,17 @@ frappe.ui.form.on("Employee", {
 		if (frm.doc.custom_use_custom_work_schedule && !(frm.doc.custom_weekly_working_hours || []).length) {
 			add_missing_schedule_days(frm);
 		}
+	},
+});
+
+// Company Details is supplied by accounting_custom. React immediately when
+// the primary row's Employment Type changes, before Employee validation copies
+// that value into the standard employment_type field.
+frappe.ui.form.on("Employee Branch Assignment", {
+	employment_type(frm) {
+		configure_employee_schedule(frm, true);
+	},
+	custom_branches_remove(frm) {
+		configure_employee_schedule(frm);
 	},
 });

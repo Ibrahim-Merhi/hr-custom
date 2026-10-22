@@ -27,6 +27,11 @@ frappe.ready(() => {
 		"Not assigned": "غير معيّن", "CHECKED IN": "تم تسجيل الدخول", "CHECKED OUT": "تم تسجيل الخروج",
 		"CLOCK IN": "تسجيل الدخول", "CLOCK OUT": "تسجيل الخروج", "No action today": "لا توجد حركة اليوم",
 		"Present": "حاضر", "Absent": "غائب", "Abnormal": "غير طبيعي", "Pending": "معلّق", "On Leave": "في إجازة",
+		"Leaves": "الإجازات", "TIME OFF": "الإجازات", "Request": "طلب", "Leave Balance": "رصيد الإجازات", "Recent Leave Requests": "طلبات الإجازة الأخيرة",
+		"Leave Type": "نوع الإجازة", "Request Leave": "طلب إجازة", "Edit Leave Request": "تعديل طلب الإجازة", "Save Changes": "حفظ التعديلات",
+		"From Date": "من تاريخ", "To Date": "إلى تاريخ", "Half Day": "نصف يوم", "Leave applications": "طلبات الإجازة",
+		"Annual Leave": "إجازة سنوية", "Marriage Leave": "إجازة زواج", "Unpaid Leave": "إجازة دون راتب", "Compensatory Leave": "إجازة تعويضية",
+		"Annual Leave - Days": "إجازة سنوية - أيام", "Marriage Leave - Days": "إجازة زواج - أيام", "Sick Leave - Days": "إجازة مرضية - أيام",
 		"Approved": "موافق عليه", "Rejected": "مرفوض", "Applied": "تم التطبيق", "Open": "مفتوح",
 		"Pending Approver Approval": "بانتظار موافقة المعتمد", "Pending HR Approval": "بانتظار موافقة الموارد البشرية",
 		"Abnormal / Pending": "غير طبيعي / معلّق", "Casual Leave": "إجازة عارضة", "Sick Leave": "إجازة مرضية",
@@ -56,6 +61,8 @@ frappe.ready(() => {
 		"Log out?": "تسجيل الخروج؟", "Are you sure you want to log out of the Employee HR Portal?": "هل أنت متأكد من رغبتك في تسجيل الخروج من بوابة الموظف؟",
 		"Log Out": "تسجيل الخروج", "Request failed.": "تعذر إكمال الطلب.",
 		"No active leave allocations found.": "لا توجد أرصدة إجازات فعّالة.", "No leave requests found.": "لا توجد طلبات إجازة.",
+		"Loading leave balances…": "جارٍ تحميل أرصدة الإجازات…", "Loading leave requests…": "جارٍ تحميل طلبات الإجازة…", "Loading leave request…": "جارٍ تحميل طلب الإجازة…",
+		"Tap to view your balances": "اضغط لعرض أرصدة إجازاتك", "No leave applications found": "لا توجد طلبات إجازة", "New employee leave requests will appear here.": "ستظهر طلبات إجازات الموظفين الجديدة هنا.",
 		"No available leave allocation": "لا يوجد رصيد إجازة متاح", "Send Leave Request": "إرسال طلب الإجازة",
 		"Sending…": "جارٍ الإرسال…", "Selecting your leave allocation and approver…": "جارٍ تحديد رصيد الإجازة والمعتمد…",
 		"Leave request sent": "تم إرسال طلب الإجازة", "Leave request updated": "تم تحديث طلب الإجازة",
@@ -107,6 +114,13 @@ frappe.ready(() => {
 	};
 	const __ = (text, replacements, context) => {
 		let translated = isArabic && arabicPortalTranslations[text] ? arabicPortalTranslations[text] : nativeTranslate(text, replacements, context);
+		if (isArabic && translated === text) {
+			const match = String(text || "").match(/^(.+?)\s*-\s*(Days|Hours)$/i);
+			if (match) {
+				const base = arabicPortalTranslations[match[1]] || nativeTranslate(match[1]);
+				if (base !== match[1]) translated = `${base} - ${match[2].toLowerCase() === "hours" ? "ساعات" : "أيام"}`;
+			}
+		}
 		if (isArabic && arabicPortalTranslations[text] && Array.isArray(replacements)) replacements.forEach((value, index) => { translated = translated.replaceAll(`{${index}}`, value); });
 		return translated;
 	};

@@ -9,7 +9,7 @@ FIELDS = {
         dict(fieldname="custom_weekly_working_hours", label="Legacy Weekly Working Hours", fieldtype="Table", options="Employment Type Working Hours", insert_after="custom_weekly_work_schedule", depends_on="eval:doc.custom_leave_calculation_mode != 'Days' && !doc.custom_weekly_work_schedule", description="Existing embedded schedule. Prefer the reusable Weekly Work Schedule master."),
     ],
     "Employee": [
-        dict(fieldname="custom_work_schedule_section", label="Work Schedule", fieldtype="Section Break", insert_after="employment_type", collapsible=1, description="For Hours or Both leave calculation, set this employee's working days, required hours, and From/To times."),
+        dict(fieldname="custom_work_schedule_section", label="Work Schedule", fieldtype="Section Break", insert_after="employment_type", collapsible=1, description="Set this employee's working days, required hours, and From/To times. Available for Full Time employees and Hours/Both leave calculation modes."),
         dict(fieldname="custom_work_schedule_workspace", label="Work Schedule", fieldtype="HTML", insert_after="custom_work_schedule_section"),
         dict(fieldname="custom_weekly_work_schedule", label="Weekly Work Schedule", fieldtype="Link", options="Weekly Work Schedule", insert_after="custom_work_schedule_workspace", hidden=1, description="Used for working hours, hourly leave and return-to-work calculations."),
         dict(fieldname="custom_use_custom_work_schedule", label="Use Employee-Specific Work Schedule", fieldtype="Check", default="0", insert_after="custom_weekly_work_schedule", hidden=1, description="Enable only when this employee works different hours from the assigned Employment Type schedule."),

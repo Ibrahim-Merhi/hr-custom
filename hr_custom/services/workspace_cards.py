@@ -25,8 +25,9 @@ def _active_employee_names(today=None):
 
 @frappe.whitelist()
 def active_employees(filters=None):
-    value = frappe.db.count("Employee", {"company": COMPANY, "status": "Active", "custom_is_payroll_identity": 0})
-    return _result(value, ["List", "Employee"], {"company": COMPANY, "status": "Active", "custom_is_payroll_identity": 0})
+    employee_filters = {"status": "Active", "custom_is_payroll_identity": 0}
+    value = frappe.db.count("Employee", employee_filters)
+    return _result(value, ["List", "Employee"], employee_filters)
 
 
 def _present_employee_names(today=None):
