@@ -77,7 +77,10 @@ def login(username=None, password=None):
 		"token_hash": token_hash(raw_token),
 		"last_seen": now_datetime(), "ip_address": getattr(frappe.local, "request_ip", "") or "",
 		"user_agent": request.headers.get("User-Agent", "")[:500] if request else "",
-		"expires_on": add_to_date(now_datetime(), hours=8, as_datetime=True) if "Portal Administrator" in portal_roles else None,
+		# Normal portal sessions remain valid across browser/PWA restarts and are
+		# revoked explicitly on logout, credential changes, or device-limit cleanup.
+		# Only impersonation sessions below are intentionally short-lived.
+		"expires_on": None,
 	}).insert(ignore_permissions=True)
 	set_portal_cookie(raw_token)
 	frappe.db.set_value("Employee Portal Credential", credential.name, "last_login", now_datetime(), update_modified=False)

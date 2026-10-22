@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 
 import frappe
 from frappe import _
@@ -30,7 +31,11 @@ def set_portal_cookie(token):
 	forwarded_proto = request.headers.get("X-Forwarded-Proto", "") if request else ""
 	secure = bool(request and (request.scheme == "https" or forwarded_proto.split(",", 1)[0].strip() == "https"))
 	frappe.local.cookie_manager.set_cookie(
-		PORTAL_COOKIE, token, max_age=PORTAL_COOKIE_MAX_AGE,
+		PORTAL_COOKIE, token,
+		max_age=PORTAL_COOKIE_MAX_AGE,
+		# Safari/iOS standalone PWAs are more reliable when a persistent cookie
+		# carries both Max-Age and an explicit RFC-compatible expiry date.
+		expires=datetime.now(timezone.utc) + timedelta(seconds=PORTAL_COOKIE_MAX_AGE),
 		httponly=True, secure=secure, samesite="Lax",
 	)
 

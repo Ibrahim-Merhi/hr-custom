@@ -10,6 +10,23 @@ from hr_custom.services import attendance_correction, portal_identity, simple_le
 
 
 class TestPortalImpersonationSecurity(unittest.TestCase):
+    def test_portal_cookie_is_persistent_for_installed_pwa(self):
+        request = SimpleNamespace(scheme="https", headers={})
+        cookie_manager = SimpleNamespace(set_cookie=lambda *args, **kwargs: None)
+        local = frappe._dict(request=request, cookie_manager=cookie_manager)
+        with (
+            patch.object(portal_identity.frappe, "local", local),
+            patch.object(cookie_manager, "set_cookie", wraps=cookie_manager.set_cookie) as set_cookie,
+        ):
+            portal_identity.set_portal_cookie("portal-token")
+
+        args, kwargs = set_cookie.call_args
+        self.assertEqual(args, (portal_identity.PORTAL_COOKIE, "portal-token"))
+        self.assertEqual(kwargs["max_age"], portal_identity.PORTAL_COOKIE_MAX_AGE)
+        self.assertIsNotNone(kwargs["expires"])
+        self.assertTrue(kwargs["httponly"])
+        self.assertTrue(kwargs["secure"])
+
     def test_only_administrator_can_start_impersonation(self):
         with (
             patch.object(portal_auth.frappe, "session", frappe._dict(user="hr.manager@example.com")),
