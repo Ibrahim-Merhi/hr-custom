@@ -23,6 +23,7 @@ def submit_checkin(
 	device_info=None,
 	device_id=None,
 	request_id=None,
+	requested_action=None,
 ):
 	try:
 		result = _api().submit_checkin(
@@ -32,6 +33,7 @@ def submit_checkin(
 			device_info,
 			device_id,
 			request_id,
+			requested_action,
 		)
 		return {"ok": True, "result": result}
 	except frappe.ValidationError as error:

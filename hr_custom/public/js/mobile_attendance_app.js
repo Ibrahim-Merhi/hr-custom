@@ -82,6 +82,8 @@ frappe.ready(() => {
 		"Your location is currently unavailable.": "موقعك غير متاح حالياً.", "The GPS request timed out. Move to an open area and retry.": "انتهت مهلة تحديد الموقع. انتقل إلى مكان مفتوح وحاول مجدداً.",
 		"Getting the required GPS accuracy…": "جارٍ الحصول على دقة الموقع المطلوبة…", "Checking GPS and branch geofence…": "جارٍ التحقق من الموقع ونطاق الفرع…",
 		"VALIDATING…": "جارٍ التحقق…", "Correction submitted": "تم إرسال طلب التصحيح",
+		"Report Missing Record": "الإبلاغ عن سجل مفقود", "Forgot a punch? Send a correction request to HR.": "هل نسيت تسجيل الدخول أو الخروج؟ أرسل طلب تصحيح إلى الموارد البشرية.",
+		"Attendance Date": "تاريخ الحضور", "Missing Check In": "تسجيل دخول مفقود", "Missing Check Out": "تسجيل خروج مفقود",
 		"Sending request…": "جارٍ إرسال الطلب…", "Your request was sent to HR.": "تم إرسال طلبك إلى الموارد البشرية.",
 		"Refreshing…": "جارٍ التحديث…", "Updated": "تم التحديث", "Refresh": "تحديث",
 		"Outside the allowed work location": "أنت خارج نطاق العمل المسموح",
@@ -211,6 +213,7 @@ frappe.ready(() => {
 		byId("state-dot")?.classList.toggle("in", value.current_state === "CHECKED IN");
 		setText("action-label", value.next_action === "IN" ? __("CLOCK IN") : __("CLOCK OUT"));
 		byId("action")?.classList.toggle("out", value.next_action === "OUT");
+		byId("report-missing-attendance")?.classList.toggle("is-hidden", !value.allow_employee_correction_request);
 		setText("last-checkin", value.last_checkin ? `${value.last_checkin.log_type} · ${moment(value.last_checkin.time).format("HH:mm")}` : __("No action today"));
 		document.querySelectorAll(".bottom-tabs [data-tab]").forEach((tab) => {
 			const name = tab.dataset.tab;
@@ -415,6 +418,7 @@ frappe.ready(() => {
 		closeSheet(byId("attendance-detail-sheet"));
 		byId("correction-form").reset();
 		setText("correction-message", "");
+		currentAttendanceDate = currentAttendanceDate || moment(Date.now() + clockOffset).format("YYYY-MM-DD");
 		byId("correction-date").value = currentAttendanceDate;
 		byId("correction-in").value = `${currentAttendanceDate}T09:00`;
 		byId("correction-out").value = `${currentAttendanceDate}T18:00`;
@@ -1329,7 +1333,18 @@ frappe.ready(() => {
 		enablePullDownDismiss(byId(id));
 	});
 	byId("open-correction-request").onclick = openCorrectionForm;
+	byId("report-missing-attendance")?.addEventListener("click", () => {
+		currentAttendanceDate = moment(Date.now() + clockOffset).format("YYYY-MM-DD");
+		openCorrectionForm();
+	});
 	byId("correction-type").onchange = updateCorrectionFields;
+	byId("correction-date").onchange = () => {
+		const date = byId("correction-date").value;
+		if (!date) return;
+		currentAttendanceDate = date;
+		byId("correction-in").value = `${date}T${byId("correction-in").value.split("T")[1] || "09:00"}`;
+		byId("correction-out").value = `${date}T${byId("correction-out").value.split("T")[1] || "18:00"}`;
+	};
 	byId("correction-form").onsubmit = submitCorrection;
 	byId("approve-correction").onclick = () => actOnCorrection("approve");
 	byId("reject-correction").onclick = () => actOnCorrection("reject");
@@ -1499,7 +1514,7 @@ frappe.ready(() => {
 		busy = true; byId("action").disabled = true; setText("action-label", __("VALIDATING…"));
 		feedback(__("Checking GPS and branch geofence…"));
 		try {
-			const response = await api("hr_custom.api.attendance_clock_v3.submit_checkin", {latitude: coords?.latitude, longitude: coords?.longitude, accuracy: coords?.accuracy, device_info: navigator.platform, device_id: deviceId});
+			const response = await api("hr_custom.api.attendance_clock_v3.submit_checkin", {latitude: coords?.latitude, longitude: coords?.longitude, accuracy: coords?.accuracy, device_info: navigator.platform, device_id: deviceId, requested_action: status?.next_action});
 			if (!response?.ok) throw new Error(response?.message || __("Could not record attendance"));
 			const result = response.result;
 			feedback("");
@@ -1507,6 +1522,7 @@ frappe.ready(() => {
 			await refresh(false);
 		} catch (error) {
 			feedback("");
+			if (String(error?.message || "").includes("attendance status changed")) await refresh(false).catch(() => {});
 			byId("action").disabled = false;
 			setText("action-label", status?.next_action === "IN" ? __("CLOCK IN") : __("CLOCK OUT"));
 			const text = String(error?.message || __("Request failed."));

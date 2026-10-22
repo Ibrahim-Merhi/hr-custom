@@ -100,6 +100,31 @@ def _latest(employee, attendance_date=None):
     return rows[0] if rows else None
 
 
+def _clock_action(employee, attendance_date):
+    """Derive the next punch from fresh server data, including HR-entered records."""
+    latest = _latest(employee, attendance_date)
+    if latest:
+        return ("OUT" if latest.log_type == "IN" else "IN"), latest
+    attendance = frappe.db.get_value(
+        "Attendance",
+        {
+            "employee": employee,
+            "attendance_date": attendance_date,
+            "docstatus": 1,
+        },
+        ["name", "in_time", "out_time"],
+        as_dict=True,
+    )
+    if attendance and attendance.in_time and not attendance.out_time:
+        return "OUT", frappe._dict(
+            name=attendance.name,
+            log_type="IN",
+            time=attendance.in_time,
+            source="HR Attendance",
+        )
+    return "IN", latest
+
+
 def _validate_location(branch, settings, latitude, longitude, accuracy):
     if not settings.require_geolocation or (branch and branch.custom_allow_checkin_without_location and latitude in (None, "")):
         return None, None, None, False
@@ -145,12 +170,12 @@ def get_status():
         # incomplete. Check-in submission retains strict branch validation.
         branches = []
         configuration_error = str(error)
-    latest = _latest(employee.name, getdate(timestamp))
+    next_action, latest = _clock_action(employee.name, getdate(timestamp))
     branch = next((row for row in branches if row.name == employee.branch), branches[0] if branches else None)
     radius = (flt(branch.custom_attendance_radius) if branch else 0) or flt(settings.default_radius)
     maximum_accuracy = (flt(branch.custom_max_gps_accuracy) if branch else 0) or flt(settings.default_max_gps_accuracy)
     require_location = cint(settings.require_geolocation) and not cint(employee.get("custom_location_not_required")) and not cint(branch.custom_allow_checkin_without_location if branch else 0)
-    return {"employee": employee.name, "employee_name": employee.employee_name, "first_name": employee.first_name, "custom_first_name_ar": employee.get("custom_first_name_ar"), "custom_employee_name_ar": employee.get("custom_employee_name_ar"), "branch": branch.name if branch else None, "branch_name_arabic": branch.get("custom_branch_name_arabic") if branch else None, "allowed_branches": [row.name for row in branches], "configuration_error": configuration_error, "server_time": timestamp, "current_state": "CHECKED IN" if latest and latest.log_type == "IN" else "CHECKED OUT", "next_action": "OUT" if latest and latest.log_type == "IN" else "IN", "last_checkin": latest, "branch_location_enabled": bool(branch), "attendance_radius": radius, "maximum_gps_accuracy": maximum_accuracy, "require_geolocation": require_location, "location_cache_seconds": cint(settings.location_cache_seconds) or 60, "fast_location_timeout": cint(settings.fast_location_timeout) or 2, "high_accuracy_timeout": cint(settings.high_accuracy_timeout) or 5, "portal_tabs": {"attendance": cint(settings.show_attendance_tab), "leaves": cint(settings.show_leaves_tab), "salary": cint(settings.show_salary_tab), "profile": cint(settings.show_profile_tab), "admin": has_portal_role("Portal Administrator")}}
+    return {"employee": employee.name, "employee_name": employee.employee_name, "first_name": employee.first_name, "custom_first_name_ar": employee.get("custom_first_name_ar"), "custom_employee_name_ar": employee.get("custom_employee_name_ar"), "branch": branch.name if branch else None, "branch_name_arabic": branch.get("custom_branch_name_arabic") if branch else None, "allowed_branches": [row.name for row in branches], "configuration_error": configuration_error, "server_time": timestamp, "current_state": "CHECKED IN" if next_action == "OUT" else "CHECKED OUT", "next_action": next_action, "last_checkin": latest, "branch_location_enabled": bool(branch), "attendance_radius": radius, "maximum_gps_accuracy": maximum_accuracy, "require_geolocation": require_location, "allow_employee_correction_request": cint(settings.allow_employee_correction_request), "location_cache_seconds": cint(settings.location_cache_seconds) or 60, "fast_location_timeout": cint(settings.fast_location_timeout) or 2, "high_accuracy_timeout": cint(settings.high_accuracy_timeout) or 5, "portal_tabs": {"attendance": cint(settings.show_attendance_tab), "leaves": cint(settings.show_leaves_tab), "salary": cint(settings.show_salary_tab), "profile": cint(settings.show_profile_tab), "admin": has_portal_role("Portal Administrator")}}
 
 
 PORTAL_ADMIN_SETTING_FIELDS = {
@@ -498,7 +523,7 @@ def mark_portal_notifications_read():
 
 
 @frappe.whitelist(methods=["POST"])
-def submit_checkin(latitude=None, longitude=None, accuracy=None, device_info=None, device_id=None, request_id=None):
+def submit_checkin(latitude=None, longitude=None, accuracy=None, device_info=None, device_id=None, request_id=None, requested_action=None):
     settings = _settings()
     if not settings.enable_mobile_attendance:
         frappe.throw(_("Mobile attendance is disabled."))
@@ -506,11 +531,36 @@ def submit_checkin(latitude=None, longitude=None, accuracy=None, device_info=Non
     branch, latitude, longitude, distance, geofence_validated = _select_branch(employee, settings, latitude, longitude, accuracy)
     _validate_device(employee, settings, device_id, timestamp)
     frappe.db.sql("select name from `tabEmployee` where name=%s for update", employee.name)
-    latest = _latest(employee.name, getdate(timestamp))
-    action = "OUT" if latest and latest.log_type == "IN" else "IN"
-    if latest and abs((timestamp - latest.time).total_seconds()) < 10:
+    action, latest = _clock_action(employee.name, getdate(timestamp))
+    requested_action = (requested_action or "").upper()
+    if requested_action and requested_action not in ("IN", "OUT"):
+        frappe.throw(_("Invalid attendance action."))
+    if requested_action and requested_action != action:
+        frappe.throw(
+            _("Your attendance status changed. Refresh the app before recording the next action.")
+        )
+    if latest and not latest.get("source") and abs((timestamp - latest.time).total_seconds()) < 10:
         frappe.throw(_("Your previous attendance action is still being processed. Please wait a few seconds."))
     user_agent, ip_address = _request_audit()
+    # HR may create the missing IN directly on Attendance. Preserve a complete
+    # punch trail before accepting the employee's OUT so the normal attendance
+    # finalizer can calculate working hours and update that attendance record.
+    if action == "OUT" and latest and latest.get("source") == "HR Attendance":
+        supporting_values = {
+            "employee": employee.name,
+            "log_type": "IN",
+            "time": latest.time,
+            "attendance": latest.name,
+            "custom_checkin_source": "Manual HR",
+            "custom_server_timestamp": timestamp,
+            "custom_validation_message": _("Created from the HR-entered attendance before employee clock-out."),
+        }
+        frappe.get_doc(
+            {
+                "doctype": "Employee Checkin",
+                **supported_values("Employee Checkin", supporting_values),
+            }
+        ).insert(ignore_permissions=True)
     values = {"employee": employee.name, "log_type": action, "time": timestamp, "device_id": (device_id or "")[:140], "custom_branch": branch.name if branch else None, "custom_latitude": latitude, "custom_longitude": longitude, "custom_gps_accuracy": flt(accuracy) if accuracy not in (None, "") else None, "custom_distance_from_branch": distance, "custom_checkin_source": "Mobile GPS", "custom_device_info": (device_info or "")[:500] if settings.enable_device_audit else "", "custom_user_agent": user_agent[:500] if settings.enable_device_audit else "", "custom_ip_address": ip_address[:140] if settings.enable_ip_audit else "", "custom_server_timestamp": timestamp, "custom_geofence_validated": cint(geofence_validated), "custom_validation_message": "Inside configured branch geofence" if geofence_validated else "Location bypass allowed by policy"}
     # Standard Employee Checkin validation assigns the applicable HRMS shift.
     # HRMS auto-attendance is the sole owner of Attendance and late/early flags.

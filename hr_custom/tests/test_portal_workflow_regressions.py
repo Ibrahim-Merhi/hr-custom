@@ -166,6 +166,51 @@ class TestAttendanceCorrectionAdjustments(unittest.TestCase):
                 attendance_correction._apply_hr_adjustments(doc, "2026-10-09 08:30:00")
 
 
+class TestMobileClockState(unittest.TestCase):
+    def test_latest_checkin_controls_the_next_action(self):
+        latest = frappe._dict(log_type="IN", time=datetime(2026, 10, 22, 8, 0))
+        with (
+            patch.object(mobile_attendance, "_latest", return_value=latest),
+            patch.object(mobile_attendance.frappe.db, "get_value") as get_value,
+        ):
+            action, source = mobile_attendance._clock_action("HR-EMP-00001", date(2026, 10, 22))
+
+        self.assertEqual(action, "OUT")
+        self.assertIs(source, latest)
+        get_value.assert_not_called()
+
+    def test_hr_entered_open_attendance_allows_employee_to_clock_out(self):
+        attendance = frappe._dict(
+            name="HR-ATT-2026-00001",
+            in_time=datetime(2026, 10, 22, 8, 0),
+            out_time=None,
+        )
+        with (
+            patch.object(mobile_attendance, "_latest", return_value=None),
+            patch.object(mobile_attendance.frappe.db, "get_value", return_value=attendance),
+        ):
+            action, source = mobile_attendance._clock_action("HR-EMP-00001", date(2026, 10, 22))
+
+        self.assertEqual(action, "OUT")
+        self.assertEqual(source.name, attendance.name)
+        self.assertEqual(source.source, "HR Attendance")
+
+    def test_completed_hr_attendance_does_not_open_an_extra_clock_out(self):
+        attendance = frappe._dict(
+            name="HR-ATT-2026-00001",
+            in_time=datetime(2026, 10, 22, 8, 0),
+            out_time=datetime(2026, 10, 22, 16, 0),
+        )
+        with (
+            patch.object(mobile_attendance, "_latest", return_value=None),
+            patch.object(mobile_attendance.frappe.db, "get_value", return_value=attendance),
+        ):
+            action, source = mobile_attendance._clock_action("HR-EMP-00001", date(2026, 10, 22))
+
+        self.assertEqual(action, "IN")
+        self.assertIsNone(source)
+
+
 class TestAttendanceCorrectionRouting(unittest.TestCase):
     def test_new_request_notification_is_queued_after_commit(self):
         doc = frappe._dict(name="ACR-TEST-00001")
