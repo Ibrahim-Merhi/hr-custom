@@ -30,6 +30,7 @@ WORK_SCHEDULE_FIELDS = [
     "custom_weekly_work_schedule",
     "custom_use_custom_work_schedule",
     "custom_weekly_working_hours",
+    "custom_reporting_structure_section",
 ]
 
 ARABIC_NAME_FIELDS = [

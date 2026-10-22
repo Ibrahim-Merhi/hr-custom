@@ -66,6 +66,16 @@ function end_time(fromTime, hours) {
 	return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}:00`;
 }
 
+function display_schedule_time(value, hours) {
+	if (!value || !Number(hours)) return "—";
+	const minutes = schedule_time(value);
+	if (minutes === null) return "—";
+	const hour = Math.floor(minutes / 60);
+	const minute = minutes % 60;
+	const suffix = hour >= 12 ? __("PM") : __("AM");
+	return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
 function schedule_table_fields() {
 	const updateEnd = function () {
 		const row = this.grid_row?.doc;
@@ -93,9 +103,9 @@ async function render_work_schedule_workspace(frm) {
 	try {
 		const data = (await frappe.call("hr_custom.services.work_schedule_profile.get_profile", {employee:frm.doc.name})).message;
 		const rows = data.rows || [];
-		const currentRows = rows.length ? rows.map((row) => `<tr><td>${__(row.day_of_week)}</td><td>${Number(row.working_hours||0).toFixed(2)}</td><td>${row.from_time||"—"}</td><td>${row.to_time||"—"}</td></tr>`).join("") : `<tr><td colspan="4" class="text-muted">${__("No employee work schedule has been created.")}</td></tr>`;
+		const currentRows = rows.length ? rows.map((row) => `<tr><td>${__(row.day_of_week)}</td><td>${Number(row.working_hours||0).toFixed(2)}</td><td>${display_schedule_time(row.from_time,row.working_hours)}</td><td>${display_schedule_time(row.to_time,row.working_hours)}</td></tr>`).join("") : `<tr><td colspan="4" class="text-muted">${__("No employee work schedule has been created.")}</td></tr>`;
 		const history = (data.revisions || []).map((revision) => {
-			const snapshot = (revision.schedule || []).map((row) => `<tr><td>${__(row.day_of_week)}</td><td>${Number(row.working_hours||0).toFixed(2)}</td><td>${row.from_time||"—"}</td><td>${row.to_time||"—"}</td></tr>`).join("");
+			const snapshot = (revision.schedule || []).map((row) => `<tr><td>${__(row.day_of_week)}</td><td>${Number(row.working_hours||0).toFixed(2)}</td><td>${display_schedule_time(row.from_time,row.working_hours)}</td><td>${display_schedule_time(row.to_time,row.working_hours)}</td></tr>`).join("");
 			return `<article class="schedule-revision"><div class="schedule-revision-summary"><div><strong>${__("Revision")} #${revision.revision_number}</strong><span>${frappe.datetime.str_to_user(revision.effective_from)} – ${revision.effective_to ? frappe.datetime.str_to_user(revision.effective_to) : __("Current")}</span></div><div><b>${Number(revision.total_weekly_hours||0).toFixed(2)} ${__("hours per week")}</b><small>${frappe.utils.escape_html(revision.change_summary||"")} · ${frappe.utils.escape_html(revision.changed_by||"")}</small></div></div><details><summary>${__("View schedule snapshot")}</summary><div class="table-responsive"><table class="table table-bordered table-sm"><thead><tr><th>${__("Day")}</th><th>${__("Working Hours")}</th><th>${__("From Time")}</th><th>${__("To Time")}</th></tr></thead><tbody>${snapshot}</tbody></table></div></details></article>`;
 		}).join("") || `<p class="text-muted">${__("No work schedule changes yet.")}</p>`;
 		field.$wrapper.html(`<div class="schedule-workspace frappe-card"><div class="schedule-tabs"><button class="active" data-schedule-tab="current">${__("Current Work Schedule")}</button><button data-schedule-tab="history">${__("Past Schedules and Changes")} <span class="badge">${data.revision_count||0}</span></button></div><div class="schedule-panel" data-schedule-panel="current"><div class="table-responsive"><table class="table table-bordered"><thead><tr><th>${__("Day")}</th><th>${__("Working Hours")}</th><th>${__("From Time")}</th><th>${__("To Time")}</th></tr></thead><tbody>${currentRows}</tbody></table></div><button class="btn btn-primary btn-sm edit-work-schedule">${rows.length ? __("Edit Current Schedule") : __("Create Work Schedule")}</button></div><div class="schedule-panel hide" data-schedule-panel="history">${history}</div></div>`);
