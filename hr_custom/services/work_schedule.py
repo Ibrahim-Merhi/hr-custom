@@ -50,6 +50,9 @@ def get_employee_schedule(employee: str, date=None) -> tuple[dict[str, float], s
         frappe.throw(_("Employee {0} does not exist.").format(frappe.bold(employee)))
 
     if values.custom_use_custom_work_schedule:
+        historical = _revision_schedule(employee, date)
+        if historical:
+            return historical, "Employee Schedule History"
         rows = _schedule_rows("Employee", employee, "custom_weekly_working_hours")
         if rows:
             return rows, "Employee"
@@ -118,6 +121,9 @@ def get_scheduled_period(employee: str, date) -> dict:
     day = getdate(date).strftime("%A")
     candidates = []
     if values.custom_use_custom_work_schedule:
+        historical = _revision_schedule(employee, date, include_period=True)
+        if historical:
+            return historical
         candidates.append(("Employee Working Hours", "Employee", employee, "custom_weekly_working_hours", "Employee"))
     if values.custom_weekly_work_schedule:
         candidates.append(("Weekly Work Schedule Day", "Weekly Work Schedule", values.custom_weekly_work_schedule, "working_hours", "Weekly Work Schedule"))
@@ -142,6 +148,45 @@ def get_scheduled_period(employee: str, date) -> dict:
                 "source": source,
             }
     return {"working_hours": 0, "from_time": None, "to_time": None, "source": None}
+
+
+def _revision_schedule(employee: str, date=None, include_period=False):
+    """Return the employee-specific schedule effective on ``date`` when history exists."""
+    if not date or not frappe.db.exists("DocType", "Employee Work Schedule Revision"):
+        return None
+    target = getdate(date)
+    revisions = frappe.get_all(
+        "Employee Work Schedule Revision",
+        filters={
+            "employee": employee,
+            "effective_from": ["<=", target],
+        },
+        fields=["name", "effective_to"],
+        order_by="effective_from desc, revision_number desc",
+        limit_page_length=0,
+    )
+    revision = next(
+        (item for item in revisions if not item.effective_to or getdate(item.effective_to) >= target),
+        None,
+    )
+    if not revision:
+        return None
+    rows = frappe.get_all(
+        "Employee Work Schedule Revision Day",
+        filters={"parent": revision.name, "parentfield": "schedule", "enabled": 1},
+        fields=["day_of_week", "working_hours", "from_time", "to_time"],
+        order_by="idx asc",
+    )
+    if include_period:
+        day = target.strftime("%A")
+        row = next((item for item in rows if item.day_of_week == day), None)
+        return {
+            "working_hours": flt(row.working_hours, 2) if row else 0,
+            "from_time": row.from_time if row else None,
+            "to_time": row.to_time if row else None,
+            "source": "Employee Schedule History",
+        }
+    return {row.day_of_week: flt(row.working_hours, 2) for row in rows}
 
 
 def get_holiday_status(employee: str, date, holiday_dates=None) -> bool:

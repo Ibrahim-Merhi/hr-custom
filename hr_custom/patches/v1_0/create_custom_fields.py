@@ -10,9 +10,10 @@ FIELDS = {
     ],
     "Employee": [
         dict(fieldname="custom_work_schedule_section", label="Work Schedule", fieldtype="Section Break", insert_after="employment_type", collapsible=1, description="For Hours or Both leave calculation, set this employee's working days, required hours, and From/To times."),
-        dict(fieldname="custom_weekly_work_schedule", label="Weekly Work Schedule", fieldtype="Link", options="Weekly Work Schedule", insert_after="custom_work_schedule_section", description="Used for working hours, hourly leave and return-to-work calculations."),
-        dict(fieldname="custom_use_custom_work_schedule", label="Use Employee-Specific Work Schedule", fieldtype="Check", default="0", insert_after="custom_weekly_work_schedule", description="Enable only when this employee works different hours from the assigned Employment Type schedule."),
-        dict(fieldname="custom_weekly_working_hours", label="Employee-Specific Working Hours", fieldtype="Table", options="Employee Working Hours", insert_after="custom_use_custom_work_schedule", depends_on="eval:doc.custom_use_custom_work_schedule", description="Set the required hours and optional work period for each working day."),
+        dict(fieldname="custom_work_schedule_workspace", label="Work Schedule", fieldtype="HTML", insert_after="custom_work_schedule_section"),
+        dict(fieldname="custom_weekly_work_schedule", label="Weekly Work Schedule", fieldtype="Link", options="Weekly Work Schedule", insert_after="custom_work_schedule_workspace", hidden=1, description="Used for working hours, hourly leave and return-to-work calculations."),
+        dict(fieldname="custom_use_custom_work_schedule", label="Use Employee-Specific Work Schedule", fieldtype="Check", default="0", insert_after="custom_weekly_work_schedule", hidden=1, description="Enable only when this employee works different hours from the assigned Employment Type schedule."),
+        dict(fieldname="custom_weekly_working_hours", label="Employee-Specific Working Hours", fieldtype="Table", options="Employee Working Hours", insert_after="custom_use_custom_work_schedule", hidden=1, description="Set the required hours and optional work period for each working day."),
         dict(fieldname="custom_first_name_ar", label="First Name (Arabic)", fieldtype="Data", translatable=0, insert_after="column_break_9"),
         dict(fieldname="custom_middle_name_ar", label="Middle Name (Arabic)", fieldtype="Data", translatable=0, insert_after="custom_first_name_ar"),
         dict(fieldname="custom_last_name_ar", label="Last Name (Arabic)", fieldtype="Data", translatable=0, insert_after="custom_middle_name_ar"),

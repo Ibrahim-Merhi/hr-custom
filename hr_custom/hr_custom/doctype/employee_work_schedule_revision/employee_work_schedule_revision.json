@@ -1,0 +1,28 @@
+{
+ "doctype": "DocType",
+ "name": "Employee Work Schedule Revision",
+ "module": "HR Custom",
+ "autoname": "EWSR-.YYYY.-.#####",
+ "engine": "InnoDB",
+ "track_changes": 1,
+ "sort_field": "revision_number",
+ "sort_order": "DESC",
+ "field_order": ["employee", "employee_name", "revision_number", "effective_from", "effective_to", "action_date", "changed_by", "total_weekly_hours", "change_summary", "schedule"],
+ "fields": [
+  {"fieldname":"employee","label":"Employee","fieldtype":"Link","options":"Employee","reqd":1,"read_only":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"employee_name","label":"Employee Name","fieldtype":"Data","read_only":1},
+  {"fieldname":"revision_number","label":"Revision","fieldtype":"Int","reqd":1,"read_only":1,"in_list_view":1},
+  {"fieldname":"effective_from","label":"Effective From","fieldtype":"Date","reqd":1,"read_only":1,"in_list_view":1},
+  {"fieldname":"effective_to","label":"Effective To","fieldtype":"Date","read_only":1,"in_list_view":1},
+  {"fieldname":"action_date","label":"Action Date","fieldtype":"Date","reqd":1,"read_only":1},
+  {"fieldname":"changed_by","label":"Changed By","fieldtype":"Link","options":"User","read_only":1},
+  {"fieldname":"total_weekly_hours","label":"Weekly Hours","fieldtype":"Float","precision":2,"read_only":1,"in_list_view":1},
+  {"fieldname":"change_summary","label":"Change Summary","fieldtype":"Small Text","read_only":1},
+  {"fieldname":"schedule","label":"Schedule Snapshot","fieldtype":"Table","options":"Employee Work Schedule Revision Day","read_only":1}
+ ],
+ "permissions": [
+  {"role":"HR User","read":1,"report":1,"export":1},
+  {"role":"HR Manager","read":1,"report":1,"export":1,"print":1},
+  {"role":"System Manager","read":1,"report":1,"export":1,"print":1}
+ ]
+}

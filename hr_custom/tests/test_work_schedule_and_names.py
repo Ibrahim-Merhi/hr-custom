@@ -9,6 +9,7 @@ from hr_custom.hr_custom.doctype.weekly_work_schedule.weekly_work_schedule impor
 from hr_custom.hr_custom.report.weekly_employee_hours.weekly_employee_hours import _worked_hours
 from hr_custom.services.employee_name import apply_bilingual_name, arabic_to_english, english_to_arabic
 from hr_custom.services.work_schedule import get_employee_schedule, get_scheduled_period
+from hr_custom.services.work_schedule_profile import get_profile, save_profile
 
 
 class TestWorkScheduleAndNames(FrappeTestCase):
@@ -56,6 +57,50 @@ class TestWorkScheduleAndNames(FrappeTestCase):
         self.assertEqual(period["working_hours"], 5)
         self.assertEqual(str(period["from_time"]), "9:30:00")
         self.assertEqual(str(period["to_time"]), "14:30:00")
+
+    def test_employee_schedule_revisions_preserve_effective_history(self):
+        employee_kwargs = {}
+        if frappe.get_meta("Employee").has_field("custom_is_payroll_identity"):
+            employee_kwargs["custom_is_payroll_identity"] = 1
+        employee = make_employee(
+            "schedule.history.test@example.com", company="_Test Company", **employee_kwargs
+        )
+        first = [
+            {
+                "day_of_week": day,
+                "working_hours": 8,
+                "from_time": "08:00:00",
+                "to_time": "16:00:00",
+                "enabled": 1,
+            }
+            for day in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+        ]
+        save_profile({
+            "employee": employee,
+            "effective_from": "2027-01-01",
+            "action_date": "2027-01-01",
+            "change_summary": "Initial employee schedule",
+            "rows": first,
+        })
+        changed = [dict(row) for row in first]
+        friday = next(row for row in changed if row["day_of_week"] == "Friday")
+        friday.update({"working_hours": 9, "from_time": "09:00:00", "to_time": "18:00:00"})
+        save_profile({
+            "employee": employee,
+            "effective_from": "2027-02-01",
+            "action_date": "2027-01-25",
+            "change_summary": "Friday shift changed",
+            "rows": changed,
+        })
+
+        profile = get_profile(employee)
+        self.assertEqual(profile["revision_count"], 2)
+        self.assertIn("Friday", profile["revisions"][0].change_summary)
+        self.assertEqual(get_scheduled_period(employee, "2027-01-08")["working_hours"], 8)
+        current = get_scheduled_period(employee, "2027-02-05")
+        self.assertEqual(current["working_hours"], 9)
+        self.assertEqual(str(current["from_time"]), "9:00:00")
+        self.assertEqual(get_employee_schedule(employee, "2027-01-08")[1], "Employee Schedule History")
 
     def test_bilingual_name_parts_build_full_names(self):
         self.assertTrue(arabic_to_english("محمد علي"))

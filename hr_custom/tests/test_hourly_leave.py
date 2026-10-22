@@ -17,7 +17,12 @@ from hr_custom.services.hourly_leave import (
 class TestHourlyLeave(FrappeTestCase):
     def setUp(self):
         frappe.set_user("Administrator")
-        self.employee = make_employee("hourly.leave.test@example.com", company="_Test Company")
+        employee_kwargs = {}
+        if frappe.get_meta("Employee").has_field("custom_is_payroll_identity"):
+            employee_kwargs["custom_is_payroll_identity"] = 1
+        self.employee = make_employee(
+            "hourly.leave.test@example.com", company="_Test Company", **employee_kwargs
+        )
         self.employment_type = self._make_employment_type("Hours", {"Monday": 5, "Tuesday": 6, "Wednesday": 4, "Thursday": 6, "Friday": 3, "Saturday": 0, "Sunday": 0})
         employee = frappe.get_doc("Employee", self.employee)
         employee.employment_type = self.employment_type

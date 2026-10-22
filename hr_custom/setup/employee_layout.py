@@ -25,6 +25,13 @@ EMPLOYEE_HISTORY_FIELDS = [
 
 LEAVE_POLICY_FIELDS = ["custom_leave_calculation_mode_override"]
 
+WORK_SCHEDULE_FIELDS = [
+    "custom_work_schedule_workspace",
+    "custom_weekly_work_schedule",
+    "custom_use_custom_work_schedule",
+    "custom_weekly_working_hours",
+]
+
 ARABIC_NAME_FIELDS = [
     "naming_series",
     "custom_first_name_ar",
@@ -59,6 +66,9 @@ def apply_employee_layout():
         order = [fieldname for fieldname in order if fieldname not in EMPLOYEE_HISTORY_FIELDS]
         history_anchor = order.index("holiday_list") + 1
         order[history_anchor:history_anchor] = EMPLOYEE_HISTORY_FIELDS
+        order = [fieldname for fieldname in order if fieldname not in WORK_SCHEDULE_FIELDS]
+        schedule_anchor = order.index("custom_work_schedule_section") + 1
+        order[schedule_anchor:schedule_anchor] = WORK_SCHEDULE_FIELDS
         order = _merge_personal_and_contacts(order)
         frappe.db.set_value("Property Setter", setter.name, "value", json.dumps(order), update_modified=False)
 
