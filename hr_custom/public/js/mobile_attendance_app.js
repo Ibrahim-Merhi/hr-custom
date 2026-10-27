@@ -93,6 +93,7 @@ frappe.ready(() => {
 		"Attendance Correction Request": "طلب تصحيح الحضور", "Attendance Date": "تاريخ الحضور", "Missing Check In": "إضافة تسجيل دخول مفقود", "Missing Check Out": "إضافة تسجيل خروج مفقود",
 		"Wrong Check In": "تصحيح وقت تسجيل الدخول", "Wrong Check Out": "تصحيح وقت تسجيل الخروج", "Other": "تصحيح آخر",
 		"Time Format": "تنسيق الوقت", "Choose how times appear in the portal": "اختر طريقة عرض الوقت في البوابة", "Reason (optional for annual leave)": "السبب (اختياري للإجازة السنوية)",
+		"A unique username has been suggested. You can change it before creating access.": "تم اقتراح اسم مستخدم غير مستخدم. يمكنك تغييره قبل إنشاء الحساب.",
 		"Sending request…": "جارٍ إرسال الطلب…", "Your request was sent to HR.": "تم إرسال طلبك إلى الموارد البشرية.",
 		"Refreshing…": "جارٍ التحديث…", "Updated": "تم التحديث", "Refresh": "تحديث",
 		"Outside the allowed work location": "أنت خارج نطاق العمل المسموح",
@@ -749,7 +750,7 @@ frappe.ready(() => {
 				fields.innerHTML = `<label>${__("Employee")}<select name="employee" required>${employees}</select></label><label>${__("Leave Type")}<select name="leave_type" required>${leaveTypes}</select></label><label>${__("Allocated Amount")}<input type="number" name="allocated_amount" min="0.25" step="0.25" required></label><label>${__("Allocation Year")}<input type="number" name="allocation_year" value="${year}" required></label><div class="date-grid"><label>${__("From Date")}<input type="date" name="from_date" value="${year}-01-01" required></label><label>${__("To Date")}<input type="date" name="to_date" value="${year}-12-31" required></label></div>`;
 			} else if (action === "portal") {
 				setText("admin-action-title", __("Create Portal Access"));
-				fields.innerHTML = `<label>${__("Portal Username")}<input name="username" value="${frappe.utils.escape_html(adminEmployee?.attendance_device_id || "")}" required></label><label>${__("Password")}<input type="password" name="password" autocomplete="new-password" required></label><label>${__("Confirm Password")}<input type="password" name="confirm_password" autocomplete="new-password" required></label>`;
+				fields.innerHTML = `<label>${__("Portal Username")}<input name="username" value="${frappe.utils.escape_html(adminEmployee?.suggested_portal_username || adminEmployee?.attendance_device_id || adminEmployee?.name || "")}" required><small class="row-subtle">${__("A unique username has been suggested. You can change it before creating access.")}</small></label><label>${__("Password")}<input type="password" name="password" autocomplete="new-password" required></label><label>${__("Confirm Password")}<input type="password" name="confirm_password" autocomplete="new-password" required></label>`;
 			}
 		} catch (error) { fields.innerHTML = `<div class="history-loading">${frappe.utils.escape_html(error.message)}</div>`; }
 	}

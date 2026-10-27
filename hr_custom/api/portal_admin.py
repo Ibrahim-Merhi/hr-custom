@@ -18,6 +18,18 @@ EMPLOYEE_DETAIL_FIELDS = ["name", *sorted(EMPLOYEE_EDIT_FIELDS), "image", "user_
 PORTAL_URL = "/attendance"
 
 
+def _available_portal_username(preferred, employee=None):
+	"""Return a valid, unused username while preserving the familiar device ID."""
+	base = (preferred or employee or "employee").strip()
+	if not frappe.db.exists("Employee Portal Credential", {"username": base}):
+		return base
+	for suffix in range(2, 10000):
+		candidate = f"{base}-{suffix}"
+		if not frappe.db.exists("Employee Portal Credential", {"username": candidate}):
+			return candidate
+	frappe.throw(_("Could not generate an available portal username. Please enter another username."))
+
+
 def _real_employee_filters(extra=None):
 	filters = {"name": ["like", "HR-EMP-%"]}
 	if frappe.get_meta("Employee").has_field("custom_is_payroll_identity"):
@@ -110,6 +122,8 @@ def get_employee(employee):
 		"Employee Portal Credential", {"employee": employee},
 		["name", "username", "enabled", "last_login", "language"], as_dict=True,
 	)
+	if not row.portal:
+		row.suggested_portal_username = _available_portal_username(row.attendance_device_id, row.name)
 	return row
 
 
@@ -186,6 +200,13 @@ def create_employee_portal_access(employee, username, password):
 		frappe.throw(_("Enter a portal username or set the Employee Attendance Device ID."))
 	if not password:
 		frappe.throw(_("Enter a portal password."))
+	conflict = frappe.db.get_value(
+		"Employee Portal Credential", {"username": username}, ["name", "employee_name"], as_dict=True
+	)
+	if conflict:
+		frappe.throw(_("Portal username {0} is already assigned to {1}. Use the suggested username or enter another one.").format(
+			frappe.bold(username), frappe.bold(conflict.employee_name or conflict.name)
+		))
 	doc = frappe.get_doc({"doctype": "Employee Portal Credential", "account_type": "Employee", "employee": employee, "username": username, "password": password, "enabled": 1})
 	doc.append("roles", {"portal_role": "Employee"})
 	actor = frappe.session.user

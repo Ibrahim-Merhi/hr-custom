@@ -31,6 +31,11 @@ class EmployeePortalCredential(Document):
 			frappe.throw(_("Enter a portal username. Employee credentials may use the Attendance Device ID."))
 		if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{2,79}", self.username):
 			frappe.throw(_("Portal Username must be 3-80 characters and may contain letters, numbers, dots, underscores and hyphens."))
+		existing = frappe.db.get_value(self.doctype, {"username": self.username}, ["name", "employee_name"], as_dict=True)
+		if existing and existing.name != self.name:
+			frappe.throw(_("Portal username {0} is already assigned to {1}. Enter another username.").format(
+				frappe.bold(self.username), frappe.bold(existing.employee_name or existing.name)
+			))
 		if self.password and not self.is_dummy_password(self.password):
 			self.flags.portal_plain_password = self.password
 

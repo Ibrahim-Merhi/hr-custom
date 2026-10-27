@@ -107,6 +107,19 @@ class TestPortalImpersonationSecurity(unittest.TestCase):
             with self.assertRaises(frappe.PermissionError):
                 portal_admin._require_admin()
 
+    def test_portal_username_suggestion_skips_existing_credentials(self):
+        existing = {"E0200", "E0200-2"}
+        with patch.object(
+            portal_admin.frappe.db,
+            "exists",
+            side_effect=lambda _doctype, filters: filters.get("username") in existing,
+        ):
+            self.assertEqual(portal_admin._available_portal_username("E0200", "HR-EMP-00200"), "E0200-3")
+
+    def test_portal_username_suggestion_uses_employee_id_when_device_id_is_empty(self):
+        with patch.object(portal_admin.frappe.db, "exists", return_value=False):
+            self.assertEqual(portal_admin._available_portal_username("", "HR-EMP-00200"), "HR-EMP-00200")
+
 
 class TestPortalDocumentSystemUser(unittest.TestCase):
     def test_virtual_portal_user_is_switched_and_restored(self):
