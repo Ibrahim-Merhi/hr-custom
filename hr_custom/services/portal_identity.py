@@ -107,6 +107,11 @@ def authenticate_portal_request():
 		frappe.set_user(f"{PORTAL_USER_PREFIX}{credential.name}")
 		frappe.local.form_dict = form_dict
 		frappe.local.employee_portal_credential = credential
+		# API requests do not inherit the language selected while rendering the
+		# portal page. Restore it before endpoint validation so frappe._() returns
+		# Arabic server errors for Arabic portal accounts.
+		if credential.language in ("en", "ar"):
+			frappe.local.lang = credential.language
 
 
 def get_portal_roles(user=None):

@@ -10,6 +10,26 @@ from hr_custom.services import attendance_correction, employee_profile, portal_i
 
 
 class TestPortalImpersonationSecurity(unittest.TestCase):
+    def test_portal_api_uses_credential_language_for_server_errors(self):
+        credential = frappe._dict(name="HR-EMP-00035", language="ar")
+        local = frappe._dict(
+            request=SimpleNamespace(
+                args={"cmd": "hr_custom.services.simple_leave.submit_simple_leave"},
+                path="/api/method/hr_custom.services.simple_leave.submit_simple_leave",
+            ),
+            form_dict=frappe._dict(cmd="hr_custom.services.simple_leave.submit_simple_leave"),
+            lang="en",
+        )
+        with (
+            patch.object(portal_identity.frappe, "local", local),
+            patch.object(portal_identity, "get_portal_credential", return_value=credential),
+            patch.object(portal_identity.frappe, "set_user"),
+        ):
+            portal_identity.authenticate_portal_request()
+
+        self.assertEqual(local.lang, "ar")
+        self.assertEqual(local.employee_portal_credential, credential)
+
     def test_portal_cookie_is_persistent_for_installed_pwa(self):
         request = SimpleNamespace(scheme="https", headers={})
         cookie_manager = SimpleNamespace(set_cookie=lambda *args, **kwargs: None)
