@@ -6,7 +6,7 @@ from unittest.mock import patch
 import frappe
 
 from hr_custom.api import mobile_attendance, portal_admin, portal_auth
-from hr_custom.services import attendance_correction, portal_identity, simple_leave, work_schedule, workspace_cards
+from hr_custom.services import attendance_correction, employee_profile, portal_identity, simple_leave, work_schedule, workspace_cards
 
 
 class TestPortalImpersonationSecurity(unittest.TestCase):
@@ -119,6 +119,28 @@ class TestPortalImpersonationSecurity(unittest.TestCase):
     def test_portal_username_suggestion_uses_employee_id_when_device_id_is_empty(self):
         with patch.object(portal_admin.frappe.db, "exists", return_value=False):
             self.assertEqual(portal_admin._available_portal_username("", "HR-EMP-00200"), "HR-EMP-00200")
+
+    def test_employee_attendance_history_is_filtered_by_selected_month(self):
+        calls = []
+
+        def get_all(doctype, **kwargs):
+            calls.append((doctype, kwargs))
+            return []
+
+        with (
+            patch.object(employee_profile, "_employee"),
+            patch.object(employee_profile.frappe, "get_all", side_effect=get_all),
+            patch.object(employee_profile.frappe, "get_meta", return_value=SimpleNamespace(has_field=lambda _field: False)),
+        ):
+            result = employee_profile.get_employee_hr_history("HR-EMP-00032", month=2, year=2028)
+
+        attendance_call = next(kwargs for doctype, kwargs in calls if doctype == "Attendance")
+        self.assertEqual(
+            attendance_call["filters"]["attendance_date"],
+            ["between", [date(2028, 2, 1), date(2028, 2, 29)]],
+        )
+        self.assertEqual(result["attendance_period"]["month"], 2)
+        self.assertEqual(result["attendance_period"]["year"], 2028)
 
 
 class TestPortalDocumentSystemUser(unittest.TestCase):

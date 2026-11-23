@@ -102,6 +102,18 @@ class TestSimpleLeave(FrappeTestCase):
             application.validate_attendance()
         self.assertEqual(str(query.call_args.args[1][3]), "2028-02-08")
 
+    def test_half_day_checkbox_derives_date_before_attendance_validation(self):
+        application = HourlyLeaveApplication({
+            "doctype": "Leave Application",
+            "employee": self.employee,
+            "from_date": "2028-02-08",
+            "to_date": "2028-02-08",
+            "half_day": 1,
+        })
+        with patch("frappe.db.sql", return_value=[]):
+            application.validate_attendance()
+        self.assertEqual(str(application.half_day_date), "2028-02-08")
+
     def test_half_day_still_blocks_present_attendance_on_full_leave_date(self):
         application = HourlyLeaveApplication({
             "doctype": "Leave Application",

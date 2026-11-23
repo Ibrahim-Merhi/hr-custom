@@ -113,6 +113,12 @@ class HourlyLeaveApplication(LeaveApplication):
         and retains its punches and worked hours. Present records on any full-leave
         date in a multi-day request remain blocking.
         """
+        # HRMS calls validate_attendance() before set_half_day_date(). Ensure a
+        # same-day request with the Half Day checkbox selected receives its date
+        # before checking an existing Present Attendance record.
+        if cint(self.half_day) and not self.half_day_date and getdate(self.from_date) == getdate(self.to_date):
+            self.half_day_date = self.from_date
+
         if not cint(self.half_day) or not self.half_day_date:
             return super().validate_attendance()
 

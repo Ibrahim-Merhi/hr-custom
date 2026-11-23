@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import cint, flt, get_last_day, getdate, nowdate
 
 
 def _employee(name):
@@ -10,9 +10,14 @@ def _employee(name):
 
 
 @frappe.whitelist()
-def get_employee_hr_history(employee):
+def get_employee_hr_history(employee, month=None, year=None):
     _employee(employee)
     today = getdate(nowdate())
+    # Keep the Employee form fast by loading attendance for one selected month.
+    month = max(1, min(cint(month) or today.month, 12))
+    year = cint(year) or today.year
+    period_start = getdate(f"{year:04d}-{month:02d}-01")
+    period_end = get_last_day(period_start)
     allocations = frappe.get_all(
         "Leave Allocation",
         filters={"employee": employee, "docstatus": 1, "from_date": ["<=", today], "to_date": [">=", today]},
@@ -49,9 +54,17 @@ def get_employee_hr_history(employee):
             attendance_fields.append(fieldname)
     attendance = frappe.get_all(
         "Attendance",
-        filters={"employee": employee, "docstatus": ["<", 2]},
+        filters={
+            "employee": employee,
+            "docstatus": ["<", 2],
+            "attendance_date": ["between", [period_start, period_end]],
+        },
         fields=attendance_fields,
         order_by="attendance_date desc",
-        limit=100,
+        limit_page_length=0,
     )
-    return {"balances": balances, "attendance": attendance}
+    return {
+        "balances": balances,
+        "attendance": attendance,
+        "attendance_period": {"month": month, "year": year, "from_date": period_start, "to_date": period_end},
+    }
