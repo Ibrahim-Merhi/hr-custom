@@ -113,6 +113,12 @@ class HourlyLeaveApplication(LeaveApplication):
         and retains its punches and worked hours. Present records on any full-leave
         date in a multi-day request remain blocking.
         """
+        # Hour-based leave represents only the requested part of a working day.
+        # It must coexist with Present attendance and recorded punches; unlike a
+        # day-based leave it never converts that Attendance to On Leave/Half Day.
+        if get_leave_unit(self.leave_type) == "Hours":
+            return
+
         # HRMS calls validate_attendance() before set_half_day_date(). Ensure a
         # same-day request with the Half Day checkbox selected receives its date
         # before checking an existing Present Attendance record.

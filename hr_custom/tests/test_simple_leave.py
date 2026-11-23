@@ -114,6 +114,23 @@ class TestSimpleLeave(FrappeTestCase):
             application.validate_attendance()
         self.assertEqual(str(application.half_day_date), "2028-02-08")
 
+    def test_hourly_leave_can_coexist_with_present_attendance(self):
+        application = HourlyLeaveApplication({
+            "doctype": "Leave Application",
+            "employee": self.employee,
+            "leave_type": self.hour_leave_type,
+            "from_date": "2028-02-08",
+            "to_date": "2028-02-08",
+            "custom_leave_duration": "Partial Hours",
+            "custom_partial_hours": 2,
+        })
+        with (
+            patch("hr_custom.overrides.leave_application.get_leave_unit", return_value="Hours"),
+            patch("frappe.db.sql") as query,
+        ):
+            application.validate_attendance()
+        query.assert_not_called()
+
     def test_half_day_still_blocks_present_attendance_on_full_leave_date(self):
         application = HourlyLeaveApplication({
             "doctype": "Leave Application",

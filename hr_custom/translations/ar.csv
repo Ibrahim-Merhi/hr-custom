@@ -301,6 +301,11 @@ Notification service is unavailable.,خدمة الإشعارات غير متاح
 Outside the allowed work location,خارج موقع العمل المسموح
 Recorded Hours,الساعات المسجلة
 Recorded hours do not yet meet the required hours.,الساعات المسجلة لا تستوفي الساعات المطلوبة بعد.
+"Attendance for employee {0} is already marked for this day","تم تسجيل حضور الموظف {0} لهذا اليوم مسبقاً."
+Partial Hours leave is limited to a single date.,إجازة الساعات الجزئية متاحة ليوم واحد فقط.
+Requested Hours must be greater than zero.,يجب أن تكون الساعات المطلوبة أكبر من صفر.
+"Requested Hours cannot exceed the scheduled {0} hours.","لا يمكن أن تتجاوز الساعات المطلوبة ساعات العمل المجدولة وقدرها {0}."
+The selected period contains no scheduled working hours eligible for leave.,لا تتضمن الفترة المحددة ساعات عمل مجدولة يمكن احتسابها كإجازة.
 Refresh,تحديث
 Reject leave request?,رفض طلب الإجازة؟
 Request failed.,فشل الطلب.

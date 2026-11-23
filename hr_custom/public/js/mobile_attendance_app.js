@@ -1094,6 +1094,11 @@ frappe.ready(() => {
 		const leaveDuration = byId("leave-duration").value;
 		const partialHours = byId("leave-partial-hours").value;
 		const halfDay = byId("leave-half-day").checked ? 1 : 0;
+		if (leaveDuration === "Partial Hours" && Number(partialHours || 0) <= 0) {
+			byId("leave-preview").classList.add("is-hidden");
+			byId("leave-message").textContent = "";
+			return;
+		}
 		try {
 			if (!leaveType) return;
 			const result = await api("hr_custom.services.simple_leave.preview_simple_leave", {from_date: fromDate, to_date: toDate, leave_type: leaveType, leave_duration: leaveDuration, partial_hours: partialHours, half_day: halfDay});
@@ -1116,11 +1121,14 @@ frappe.ready(() => {
 	}
 	function updateHourlyFields() {
 		const hourly = byId("leave-unit").value === "Hours";
+		const partial = hourly && byId("leave-duration").value === "Partial Hours";
 		byId("half-day-field").classList.toggle("is-hidden", hourly);
 		if (hourly) byId("leave-half-day").checked = false;
 		byId("hourly-leave-fields").classList.toggle("is-hidden", !hourly);
-		byId("partial-hours-field").classList.toggle("is-hidden", !hourly || byId("leave-duration").value !== "Partial Hours");
-		if (hourly && byId("leave-duration").value === "Partial Hours") byId("leave-to-date").value = byId("leave-from-date").value;
+		byId("partial-hours-field").classList.toggle("is-hidden", !partial);
+		byId("leave-partial-hours").required = partial;
+		byId("leave-to-date").disabled = partial;
+		if (partial) byId("leave-to-date").value = byId("leave-from-date").value;
 		scheduleLeavePreview();
 	}
 
@@ -1526,7 +1534,7 @@ frappe.ready(() => {
 	byId("open-leave-request").onclick = openLeaveRequest;
 	byId("leave-sheet-close").onclick = closeLeaveRequest;
 	byId("leave-sheet").addEventListener("click", (event) => { if (event.target === byId("leave-sheet")) closeLeaveRequest(); });
-	byId("leave-from-date").addEventListener("change", () => { resetLeaveSubmitState(); if (!byId("leave-to-date").value || byId("leave-to-date").value < byId("leave-from-date").value) byId("leave-to-date").value = byId("leave-from-date").value; byId("leave-to-date").min = byId("leave-from-date").value; });
+	byId("leave-from-date").addEventListener("change", () => { resetLeaveSubmitState(); const partial = byId("leave-unit").value === "Hours" && byId("leave-duration").value === "Partial Hours"; if (partial || !byId("leave-to-date").value || byId("leave-to-date").value < byId("leave-from-date").value) byId("leave-to-date").value = byId("leave-from-date").value; byId("leave-to-date").min = byId("leave-from-date").value; });
 	byId("leave-from-date").addEventListener("change", scheduleLeavePreview);
 	byId("leave-to-date").addEventListener("change", () => { resetLeaveSubmitState(); loadAvailableLeaveTypes(); scheduleLeavePreview(); });
 	byId("leave-from-date").addEventListener("change", loadAvailableLeaveTypes);
