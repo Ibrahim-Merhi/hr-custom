@@ -15,6 +15,11 @@ FULL_DURATION = "Full Scheduled Hours"
 PARTIAL_DURATION = "Partial Hours"
 
 
+def leave_detail_schedule_source(source: str | None) -> str:
+    """Map detailed schedule provenance to the child table's stable choices."""
+    return "Employment Type" if str(source or "").startswith("Employment Type") else "Employee"
+
+
 def calculate_hourly_leave(
     employee: str,
     leave_type: str,
@@ -57,7 +62,7 @@ def calculate_hourly_leave(
                 "leave_hours": leave_hours,
                 "is_holiday": cint(holiday),
                 "is_non_working_day": cint(non_working),
-                "schedule_source": source,
+                "schedule_source": leave_detail_schedule_source(source),
                 "remarks": remarks,
             }
         )

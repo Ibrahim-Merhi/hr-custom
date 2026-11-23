@@ -11,10 +11,21 @@ from hr_custom.hr_custom.report.hourly_leave_balance.hourly_leave_balance import
 from hr_custom.services.hourly_leave import (
     calculate_hourly_leave,
     get_hour_leave_balance,
+    leave_detail_schedule_source,
 )
 
 
 class TestHourlyLeave(FrappeTestCase):
+    def test_schedule_source_is_normalized_for_leave_detail_rows(self):
+        self.assertEqual(leave_detail_schedule_source("Employee"), "Employee")
+        self.assertEqual(leave_detail_schedule_source("Employee Schedule History"), "Employee")
+        self.assertEqual(leave_detail_schedule_source("Weekly Work Schedule"), "Employee")
+        self.assertEqual(leave_detail_schedule_source("Employment Type"), "Employment Type")
+        self.assertEqual(
+            leave_detail_schedule_source("Employment Type Weekly Work Schedule"),
+            "Employment Type",
+        )
+
     def setUp(self):
         frappe.set_user("Administrator")
         employee_kwargs = {}
