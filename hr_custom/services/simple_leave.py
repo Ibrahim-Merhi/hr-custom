@@ -472,7 +472,7 @@ def process_leave_approval(name, action, remarks=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def amend_approved_leave(name, from_date, to_date, leave_type, reason, amendment_note,
+def amend_approved_leave(name, from_date, to_date, leave_type, reason=None, amendment_note=None,
                          half_day=0, half_day_date=None, leave_duration=None, partial_hours=None):
     if frappe.session.user != "Administrator" and "HR Manager" not in frappe.get_roles():
         frappe.throw(_("Only HR Managers can modify approved leave."), frappe.PermissionError)
@@ -490,7 +490,8 @@ def amend_approved_leave(name, from_date, to_date, leave_type, reason, amendment
         frappe.throw(_("Enter the leave type and both dates."))
     unit = get_leave_unit(leave_type)
     half_day = cint(half_day) if unit == "Days" else 0
-    if not (reason or "").strip() and _reason_is_required(leave_type):
+    reason = (original.description if reason is None else reason) or ""
+    if not reason.strip() and _reason_is_required(leave_type):
         frappe.throw(_("Please enter the reason for your leave."))
     replacement = frappe.get_doc({
         "doctype": "Leave Application", "amended_from": original.name,
