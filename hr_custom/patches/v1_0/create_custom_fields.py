@@ -37,7 +37,7 @@ FIELDS = {
         dict(fieldname="custom_location_not_required", label="Location Not Required", fieldtype="Check", default="0", insert_after="custom_mobile_attendance_policy", description="Allows this employee to clock in and out without GPS even when geolocation is required globally."),
         dict(fieldname="custom_attendance_branches", label="Allowed Clock-in Branches", fieldtype="Table", options="Employee Attendance Branch", insert_after="custom_location_not_required", description="Branches where this employee may clock in or out. If empty, the employee's main Branch is used."),
         dict(fieldname="custom_leaves_tab", label="Leaves", fieldtype="Tab Break", insert_after="custom_attendance_log_html"),
-        dict(fieldname="custom_leave_balances_tab", label="Leave Balances", fieldtype="Section Break", insert_after="custom_leaves_tab"),
+        dict(fieldname="custom_leave_balances_tab", label="Leave Balances", fieldtype="Section Break", insert_after="custom_leaves_tab", collapsible=0),
         dict(fieldname="custom_leave_balances_html", label="Leave Balances", fieldtype="HTML", insert_after="custom_leave_balances_tab"),
         dict(fieldname="custom_attendance_log_tab", label="Attendance Log", fieldtype="Section Break", insert_after="holiday_list", collapsible=1),
         dict(fieldname="custom_attendance_log_html", label="Attendance Log", fieldtype="HTML", insert_after="custom_attendance_log_tab"),

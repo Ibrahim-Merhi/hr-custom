@@ -36,13 +36,15 @@ def get_employee_leave_history(employee, year):
 
     totals = {}
     for row in frappe.get_list("Leave Allocation", filters={**filters, "docstatus": 1},
-                               fields=["leave_type", "total_leaves_allocated"], limit_page_length=0):
-        item = totals.setdefault(row.leave_type, {"allocated": 0, "used": 0})
+                               fields=["name", "leave_type", "from_date", "to_date", "total_leaves_allocated"],
+                               order_by="from_date asc, name asc", limit_page_length=0):
+        item = totals.setdefault(row.leave_type, {"allocated": 0, "used": 0, "allocations": []})
         item["allocated"] += flt(row.total_leaves_allocated)
+        item["allocations"].append(row)
     for row in requests:
         if row.docstatus != 1 or row.status != "Approved":
             continue
-        item = totals.setdefault(row.leave_type, {"allocated": 0, "used": 0})
+        item = totals.setdefault(row.leave_type, {"allocated": 0, "used": 0, "allocations": []})
         hour_leave = row.custom_leave_unit == "Hours"
         used = row.custom_leave_hours if hour_leave else row.total_leave_days
         if row.from_date < start or row.to_date > end:
@@ -56,10 +58,12 @@ def get_employee_leave_history(employee, year):
             else:
                 used = get_number_of_leave_days(employee, row.leave_type, first, last,
                                                 half_day=row.half_day, half_day_date=row.half_day_date)
-        item["used"] += flt(used)
+        row.used_in_year = flt(used, 2)
+        item["used"] += row.used_in_year
     return {"requests": requests, "balances": [
         {"leave_type": kind, "unit": get_leave_unit(kind), "allocated": flt(item["allocated"], 2),
-         "used": flt(item["used"], 2), "remaining": flt(item["allocated"] - item["used"], 2)}
+         "used": flt(item["used"], 2), "remaining": flt(item["allocated"] - item["used"], 2),
+         "allocations": item["allocations"]}
         for kind, item in sorted(totals.items())
     ]}
 
