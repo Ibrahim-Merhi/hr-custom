@@ -133,6 +133,8 @@ def validate_pending_leave_withdrawal(doc, employee):
 
 
 def validate_pending_leave_edit(doc, employee):
+    if doc.get("custom_split_leave_plan"):
+        frappe.throw(_("Withdraw the mixed leave request and submit a replacement to change its periods."))
     if doc.employee != employee:
         frappe.throw(_("You may only edit your own leave request."), frappe.PermissionError)
     if doc.docstatus != 0 or doc.status != "Open" or (doc.custom_approval_stage or "") not in ("", "Pending Approver Approval"):
@@ -249,7 +251,7 @@ def withdraw_pending_leave(name):
 
 def initialize_leave_approval(doc, method=None):
     """Build an immutable, ordered approval route from the Employee setup."""
-    if doc.doctype != "Leave Application" or doc.get("custom_approval_steps"):
+    if doc.doctype != "Leave Application" or doc.get("custom_approval_steps") or doc.flags.get("hr_approved_amendment"):
         return
     approvers = get_employee_approvers(doc.employee)
     if not approvers:
@@ -416,6 +418,7 @@ def process_leave_approval(name, action, remarks=None):
         current_step.remarks = note
 
     if action == "reject":
+        doc.flags.finalizing_split_leave = True
         doc.custom_approval_stage = "Rejected"
         doc.custom_current_approver = None
         doc.status = "Rejected"
@@ -425,6 +428,7 @@ def process_leave_approval(name, action, remarks=None):
         return {"name": doc.name, "stage": doc.custom_approval_stage, "status": doc.status, "docstatus": doc.docstatus}
 
     if is_hr_override:
+        doc.flags.finalizing_split_leave = True
         acted_on = now_datetime()
         audit_note = _("Bypassed and approved by HR {0}: {1}").format(frappe.session.user, note)
         for step in doc.custom_approval_steps:
@@ -458,12 +462,57 @@ def process_leave_approval(name, action, remarks=None):
     doc.custom_approval_stage = "Approved"
     doc.custom_current_approver = None
     doc.status = "Approved"
+    doc.flags.finalizing_split_leave = True
     doc.custom_final_approved_by = frappe.session.user
     doc.custom_final_approval_date = now_datetime()
     doc.flags.ignore_permissions = True
     doc.save()
     doc.submit()
     return {"name": doc.name, "stage": doc.custom_approval_stage, "status": doc.status, "docstatus": doc.docstatus}
+
+
+@frappe.whitelist(methods=["POST"])
+def amend_approved_leave(name, from_date, to_date, leave_type, reason, amendment_note,
+                         half_day=0, half_day_date=None, leave_duration=None, partial_hours=None):
+    if frappe.session.user != "Administrator" and "HR Manager" not in frappe.get_roles():
+        frappe.throw(_("Only HR Managers can modify approved leave."), frappe.PermissionError)
+    note = (amendment_note or "").strip()
+    if not note:
+        frappe.throw(_("Enter a reason for modifying this leave."))
+    frappe.db.sql("select name from `tabLeave Application` where name=%s for update", name)
+    original = frappe.get_doc("Leave Application", name)
+    original.check_permission("cancel")
+    if original.get("custom_split_leave_plan") or original.get("custom_split_leave_parent"):
+        frappe.throw(_("Mixed leave must be cancelled and requested again as a group."))
+    if original.docstatus != 1 or original.status != "Approved" or original.get("custom_is_migrated_record"):
+        frappe.throw(_("Only submitted, approved, non-migrated leave can be modified."))
+    if not from_date or not to_date or not leave_type:
+        frappe.throw(_("Enter the leave type and both dates."))
+    unit = get_leave_unit(leave_type)
+    half_day = cint(half_day) if unit == "Days" else 0
+    if not (reason or "").strip() and _reason_is_required(leave_type):
+        frappe.throw(_("Please enter the reason for your leave."))
+    replacement = frappe.get_doc({
+        "doctype": "Leave Application", "amended_from": original.name,
+        "employee": original.employee, "company": original.company,
+        "leave_approver": original.leave_approver, "posting_date": nowdate(),
+        "leave_type": leave_type, "from_date": from_date, "to_date": to_date,
+        "description": reason, "status": "Approved", "half_day": half_day,
+        "half_day_date": (half_day_date or from_date) if half_day else None,
+        "custom_leave_duration": leave_duration if unit == "Hours" else None,
+        "custom_partial_hours": partial_hours if unit == "Hours" else None,
+        "custom_approval_stage": "Approved", "custom_final_approved_by": frappe.session.user,
+        "custom_final_approval_date": now_datetime(),
+    })
+    replacement.check_permission("create")
+    replacement.check_permission("submit")
+    original.cancel()
+    replacement.flags.hr_approved_amendment = True
+    replacement.flags.skip_standard_leave_notification = True
+    replacement.insert()
+    replacement.submit()
+    replacement.add_comment("Comment", _("HR amendment reason: {0}").format(frappe.utils.escape_html(note)))
+    return {"name": replacement.name}
 
 
 def select_leave_type(employee, from_date, to_date, leave_unit=None, requested_leave_type=None):
@@ -566,6 +615,86 @@ def preview_simple_leave(from_date, to_date, leave_unit="Days", leave_duration=N
     unit = get_leave_unit(leave_type) if leave_type else (leave_unit if leave_unit in ("Days", "Hours") else None)
     leave_type = select_leave_type(employee.name, getdate(from_date), getdate(to_date), unit, leave_type)
     return calculate_leave_calendar(employee.name, leave_type, from_date, to_date, leave_duration, partial_hours, half_day)
+
+
+def _split_period_doc(parent, period, status):
+    return frappe.get_doc({
+        "doctype": "Leave Application", "employee": parent.employee,
+        "company": parent.company, "leave_approver": parent.leave_approver,
+        "posting_date": parent.posting_date, "description": parent.description,
+        "status": status, **period,
+    })
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_split_leave(leave_type, from_date, to_date, additional_periods,
+                       reason=None, employee=None):
+    from hr_custom.api.mobile_attendance import _employee_for_user
+    from hr_custom.services.portal_identity import run_portal_document_as_system_user
+
+    desk_request = bool(employee)
+    if desk_request:
+        frappe.get_doc("Employee", employee).check_permission("read")
+    else:
+        employee = _employee_for_user().name
+    extra = frappe.parse_json(additional_periods)
+    if not isinstance(extra, list) or not extra or not to_date:
+        frappe.throw(_("Add at least one additional leave period and enter the final date."))
+    entries = [{"leave_type": leave_type, "from_date": from_date}, *extra]
+    if any(not isinstance(row, dict) or not row.get("leave_type") or not row.get("from_date") for row in entries):
+        frappe.throw(_("Enter a leave type and start date for each period."))
+    starts = [getdate(row["from_date"]) for row in entries]
+    end = getdate(to_date)
+    types = [row["leave_type"] for row in entries]
+    if starts != sorted(set(starts)) or starts[-1] > end or len(set(types)) < 2:
+        frappe.throw(_("Use at least two leave types and enter period start dates in ascending order through the final date."))
+    if any(get_leave_unit(kind) != "Days" for kind in types):
+        frappe.throw(_("Mixed leave currently supports day-based leave types only."))
+    reason = (reason or "").strip()
+    if not reason and any(_reason_is_required(kind) for kind in types):
+        frappe.throw(_("Please enter the reason for your leave."))
+    if not get_employee_approvers(employee):
+        frappe.throw(_("No leave approver is configured for this employee."))
+    periods = [
+        {"leave_type": kind, "from_date": str(start), "to_date": str(stop)}
+        for kind, start, stop in zip(types, starts, [*(add_days(day, -1) for day in starts[1:]), end])
+    ]
+    for period in periods:
+        select_leave_type(employee, period["from_date"], period["to_date"], "Days", period["leave_type"])
+        calculate_leave_calendar(employee, **period)
+    defaults = get_leave_application_employee_defaults(employee)
+    request = frappe.get_doc({
+        "doctype": "Leave Application", "employee": employee, **defaults, **periods[0],
+        "posting_date": nowdate(), "description": reason, "status": "Open",
+        "custom_split_leave_plan": frappe.as_json(periods),
+    })
+    if desk_request:
+        request.check_permission("create")
+    with run_portal_document_as_system_user():
+        request.flags.creating_split_leave = True
+        if not desk_request:
+            request.flags.skip_standard_leave_notification = True
+        request.insert(ignore_permissions=not desk_request, ignore_links=not desk_request)
+        for period in periods[1:]:
+            _split_period_doc(request, period, "Open").run_method("validate")
+    return {"name": request.name}
+
+
+def submit_additional_leave_periods(parent):
+    if not parent.get("custom_split_leave_plan") or parent.status != "Approved":
+        return
+    for period in frappe.parse_json(parent.custom_split_leave_plan)[1:]:
+        child = _split_period_doc(parent, period, "Approved")
+        child.custom_split_leave_parent = parent.name
+        child.custom_approval_stage = "Approved"
+        child.custom_final_approved_by = parent.custom_final_approved_by
+        child.custom_final_approval_date = parent.custom_final_approval_date
+        child.flags.hr_approved_amendment = True
+        child.flags.creating_split_leave = True
+        child.flags.skip_standard_leave_notification = True
+        child.flags.ignore_permissions = parent.flags.ignore_permissions
+        child.insert(ignore_links=str(frappe.session.user).startswith("portal::"))
+        child.submit()
 
 
 @frappe.whitelist(methods=["POST"])

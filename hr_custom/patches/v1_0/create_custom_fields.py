@@ -36,10 +36,12 @@ FIELDS = {
         dict(fieldname="custom_mobile_attendance_policy", label="Mobile Attendance Policy", fieldtype="Section Break", insert_after="custom_leave_approvers", collapsible=1),
         dict(fieldname="custom_location_not_required", label="Location Not Required", fieldtype="Check", default="0", insert_after="custom_mobile_attendance_policy", description="Allows this employee to clock in and out without GPS even when geolocation is required globally."),
         dict(fieldname="custom_attendance_branches", label="Allowed Clock-in Branches", fieldtype="Table", options="Employee Attendance Branch", insert_after="custom_location_not_required", description="Branches where this employee may clock in or out. If empty, the employee's main Branch is used."),
-        dict(fieldname="custom_leave_balances_tab", label="Leave Balances", fieldtype="Section Break", insert_after="holiday_list", collapsible=1),
+        dict(fieldname="custom_leaves_tab", label="Leaves", fieldtype="Tab Break", insert_after="custom_attendance_log_html"),
+        dict(fieldname="custom_leave_balances_tab", label="Leave Balances", fieldtype="Section Break", insert_after="custom_leaves_tab"),
         dict(fieldname="custom_leave_balances_html", label="Leave Balances", fieldtype="HTML", insert_after="custom_leave_balances_tab"),
-        dict(fieldname="custom_attendance_log_tab", label="Attendance Log", fieldtype="Section Break", insert_after="custom_leave_balances_html", collapsible=1),
+        dict(fieldname="custom_attendance_log_tab", label="Attendance Log", fieldtype="Section Break", insert_after="holiday_list", collapsible=1),
         dict(fieldname="custom_attendance_log_html", label="Attendance Log", fieldtype="HTML", insert_after="custom_attendance_log_tab"),
+        dict(fieldname="custom_leave_history_html", label="Leave History", fieldtype="HTML", insert_after="custom_leave_balances_html"),
         dict(fieldname="custom_column_break_ikfre", fieldtype="Column Break", insert_after="grade"),
     ],
     "Leave Type": [
@@ -47,6 +49,8 @@ FIELDS = {
         dict(fieldname="custom_legacy_leave_type_code", label="Legacy Leave Type Code", fieldtype="Data", unique=1, insert_after="custom_leave_unit", description="Code used to resolve leave types during legacy allowance migration."),
     ],
     "Leave Application": [
+        dict(fieldname="custom_split_leave_plan", label="Additional Leave Periods", fieldtype="Long Text", read_only=1, hidden=1, no_copy=1, insert_after="description"),
+        dict(fieldname="custom_split_leave_parent", label="Mixed Leave Request", fieldtype="Data", read_only=1, no_copy=1, insert_after="description"),
         dict(fieldname="custom_approval_workflow_section", label="Employee Approval Workflow", fieldtype="Section Break", insert_after="description", collapsible=1),
         dict(fieldname="custom_approval_stage", label="Approval Stage", fieldtype="Select", options="\nPending Approver Approval\nPending HR Approval\nApproved\nRejected", read_only=1, allow_on_submit=1, in_list_view=1, insert_after="custom_approval_workflow_section"),
         dict(fieldname="custom_current_approver", label="Current Approver Employee", fieldtype="Link", options="Employee", read_only=1, allow_on_submit=1, insert_after="custom_approval_stage"),

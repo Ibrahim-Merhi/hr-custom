@@ -23,6 +23,16 @@ class HourlyLeaveApplication(LeaveApplication):
         return cint(self.get(MIGRATED_RECORD_FIELD)) == 1
 
     def validate(self):
+        if not self.flags.get("creating_split_leave"):
+            previous = self.get_doc_before_save()
+            for field in ("custom_split_leave_plan", "custom_split_leave_parent"):
+                if (self.get(field) or "") != ((previous.get(field) if previous else None) or ""):
+                    frappe.throw(_("Create mixed leave through the mixed leave request form."))
+            if previous and self.get("custom_split_leave_plan") and any(
+                self.has_value_changed(field) for field in
+                ("employee", "leave_type", "from_date", "to_date", "half_day", "half_day_date")
+            ):
+                frappe.throw(_("The periods of a mixed leave request cannot be edited individually."))
         if not self.is_historical_migration():
             return super().validate()
 
@@ -88,7 +98,23 @@ class HourlyLeaveApplication(LeaveApplication):
         if self.is_historical_migration():
             self.create_leave_ledger_entry()
             return
-        return super().on_submit()
+        if self.get("custom_split_leave_plan") and not self.flags.get("finalizing_split_leave"):
+            frappe.throw(_("Finalize a mixed leave request through the Approval actions."))
+        super().on_submit()
+        from hr_custom.services.simple_leave import submit_additional_leave_periods
+        submit_additional_leave_periods(self)
+
+    def on_cancel(self):
+        if self.get("custom_split_leave_parent") and not self.flags.get("cancelling_split_leave"):
+            frappe.throw(_("Cancel the main mixed leave request to cancel all of its periods."))
+        if self.get("custom_split_leave_plan"):
+            for name in frappe.get_all("Leave Application", filters={
+                "custom_split_leave_parent": self.name, "docstatus": 1,
+            }, pluck="name"):
+                child = frappe.get_doc("Leave Application", name)
+                child.flags.cancelling_split_leave = True
+                child.cancel()
+        return super().on_cancel()
 
     def validate_balance_leaves(self):
         if self.is_historical_migration():

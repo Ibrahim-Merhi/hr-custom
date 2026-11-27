@@ -412,8 +412,10 @@ def get_portal_leave_detail(name):
         "half_day": doc.half_day,
         "custom_leave_duration": doc.get("custom_leave_duration"),
         "custom_partial_hours": doc.get("custom_partial_hours"),
+        "leave_periods": frappe.parse_json(doc.custom_split_leave_plan) if doc.get("custom_split_leave_plan") else [],
         "can_edit": bool(
             employee and doc.employee == employee.name
+            and not doc.get("custom_split_leave_plan")
             and doc.docstatus == 0
             and doc.status == "Open"
             and (doc.custom_approval_stage or "") in ("", "Pending Approver Approval")

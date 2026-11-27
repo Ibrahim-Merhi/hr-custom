@@ -3,6 +3,67 @@ from frappe import _
 from frappe.utils import cint, flt, get_last_day, getdate, nowdate
 
 
+@frappe.whitelist()
+def get_employee_leave_years(employee):
+    _employee(employee)
+    years = {getdate(nowdate()).year}
+    for doctype in ("Leave Application", "Leave Allocation"):
+        for row in frappe.get_list(doctype, filters={"employee": employee}, fields=["from_date", "to_date"],
+                                   distinct=True, limit_page_length=0):
+            if row.from_date and row.to_date:
+                years.update(range(row.from_date.year, row.to_date.year + 1))
+    return sorted(years, reverse=True)
+
+
+@frappe.whitelist()
+def get_employee_leave_history(employee, year):
+    _employee(employee)
+    year = cint(year)
+    if not 1900 <= year <= 9999:
+        frappe.throw(_("Enter a valid year."))
+    start, end = getdate(f"{year}-01-01"), getdate(f"{year}-12-31")
+    filters = {"employee": employee, "from_date": ["<=", end], "to_date": [">=", start]}
+    requests = frappe.get_list(
+        "Leave Application",
+        filters=filters,
+        fields=["name", "leave_type", "from_date", "to_date", "status", "docstatus",
+                "total_leave_days", "custom_leave_unit", "custom_leave_hours", "half_day", "half_day_date"],
+        order_by="from_date desc, name desc",
+        limit_page_length=0,
+    )
+    from hr_custom.services.work_schedule import get_leave_unit
+    from hrms.hr.doctype.leave_application.leave_application import get_number_of_leave_days
+
+    totals = {}
+    for row in frappe.get_list("Leave Allocation", filters={**filters, "docstatus": 1},
+                               fields=["leave_type", "total_leaves_allocated"], limit_page_length=0):
+        item = totals.setdefault(row.leave_type, {"allocated": 0, "used": 0})
+        item["allocated"] += flt(row.total_leaves_allocated)
+    for row in requests:
+        if row.docstatus != 1 or row.status != "Approved":
+            continue
+        item = totals.setdefault(row.leave_type, {"allocated": 0, "used": 0})
+        hour_leave = row.custom_leave_unit == "Hours"
+        used = row.custom_leave_hours if hour_leave else row.total_leave_days
+        if row.from_date < start or row.to_date > end:
+            first, last = max(start, row.from_date), min(end, row.to_date)
+            if hour_leave:
+                details = frappe.get_all("Leave Hour Detail", filters={
+                    "parent": row.name, "parenttype": "Leave Application",
+                    "leave_date": ["between", [first, last]],
+                }, pluck="leave_hours")
+                used = sum(flt(value) for value in details)
+            else:
+                used = get_number_of_leave_days(employee, row.leave_type, first, last,
+                                                half_day=row.half_day, half_day_date=row.half_day_date)
+        item["used"] += flt(used)
+    return {"requests": requests, "balances": [
+        {"leave_type": kind, "unit": get_leave_unit(kind), "allocated": flt(item["allocated"], 2),
+         "used": flt(item["used"], 2), "remaining": flt(item["allocated"] - item["used"], 2)}
+        for kind, item in sorted(totals.items())
+    ]}
+
+
 def _employee(name):
     doc = frappe.get_doc("Employee", name)
     doc.check_permission("read")

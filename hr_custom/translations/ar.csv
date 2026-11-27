@@ -367,3 +367,15 @@ Save Changes,حفظ التعديلات
 Leave request updated and returned to the first approver.,تم تحديث طلب الإجازة وإعادته إلى المعتمد الأول.
 You may only edit your own leave request.,يمكنك تعديل طلب الإجازة الخاص بك فقط.
 This leave request can no longer be edited because it is not waiting for an employee approver.,لم يعد من الممكن تعديل طلب الإجازة لأنه ليس بانتظار موافقة معتمد الموظف.
+Add multiple leave types,إضافة أكثر من نوع إجازة
+Add Period,إضافة فترة
+Remove Period,إزالة الفترة
+Period Starts,تاريخ بدء الفترة
+Select Leave Type,اختر نوع الإجازة
+Each period ends the day before the next one begins. To Date is the final day of the request.,تنتهي كل فترة في اليوم السابق لبدء الفترة التالية. يمثّل حقل «إلى تاريخ» آخر يوم في الطلب.
+Mixed Leave Request,طلب إجازة متعدد الأنواع
+Mixed leave request {0} sent for approval.,تم إرسال طلب الإجازة متعدد الأنواع {0} للموافقة.
+Add at least one additional leave period and enter the final date.,أضف فترة إجازة أخرى واحدة على الأقل وحدّد تاريخ نهاية الطلب.
+Enter a leave type and start date for each period.,حدّد نوع الإجازة وتاريخ البدء لكل فترة.
+Use at least two leave types and enter period start dates in ascending order through the final date.,اختر نوعين مختلفين على الأقل ورتّب تواريخ بدء الفترات تصاعدياً بحيث لا تتجاوز تاريخ نهاية الطلب.
+Mixed leave currently supports day-based leave types only.,يدعم الطلب متعدد الأنواع حالياً الإجازات المحتسبة بالأيام فقط.

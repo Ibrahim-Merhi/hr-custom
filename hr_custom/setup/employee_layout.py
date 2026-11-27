@@ -1,6 +1,7 @@
 import json
 
 import frappe
+from frappe.custom.doctype.property_setter.property_setter import make_property_setter
 
 
 ONE_COLUMN_BREAKS = {
@@ -17,10 +18,12 @@ MOBILE_ATTENDANCE_FIELDS = [
 ]
 
 EMPLOYEE_HISTORY_FIELDS = [
-    "custom_leave_balances_tab",
-    "custom_leave_balances_html",
     "custom_attendance_log_tab",
     "custom_attendance_log_html",
+    "custom_leaves_tab",
+    "custom_leave_balances_tab",
+    "custom_leave_balances_html",
+    "custom_leave_history_html",
 ]
 
 LEAVE_POLICY_FIELDS = ["custom_leave_calculation_mode_override"]
@@ -44,6 +47,7 @@ ARABIC_NAME_FIELDS = [
 
 def apply_employee_layout():
     """Preserve the customized Employee overview with full-width HR sections."""
+    make_property_setter("Employee", "attendance_and_leave_details", "label", "Attendance", "Data")
     setter = frappe.db.get_value(
         "Property Setter",
         {"doc_type": "Employee", "property": "field_order"},

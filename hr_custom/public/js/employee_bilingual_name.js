@@ -3,6 +3,7 @@ frappe.ui.form.on("Employee", {
 		// Register the history render first.  Layout customisation must never be
 		// allowed to prevent the read-only HR tables from loading.
 		setTimeout(() => load_employee_hr_history(frm), 100);
+		render_employee_leave_history(frm);
 		try {
 			simplify_employee_form(frm);
 			sync_arabic_full_name(frm);
@@ -14,6 +15,78 @@ frappe.ui.form.on("Employee", {
 	custom_middle_name_ar: sync_arabic_full_name,
 	custom_last_name_ar: sync_arabic_full_name,
 });
+
+async function render_employee_leave_history(frm) {
+	const field = frm.fields_dict.custom_leave_history_html;
+	if (!field || frm.is_new()) return;
+	frm.toggle_display("custom_leave_balances_html", false);
+	const wrapper = field.$wrapper;
+	const employee = frm.doc.name;
+	wrapper.text(__("Loading leave history…"));
+	try {
+		const {message: years} = await frappe.call({
+			method: "hr_custom.services.employee_profile.get_employee_leave_years", args: {employee},
+		});
+		if (frm.doc.name !== employee) return;
+		wrapper.empty();
+		years.forEach((year, index) => {
+			const section = $(`<details class="border rounded mb-2">
+				<summary class="p-3 font-weight-bold">${history_cell(year)}</summary>
+				<div class="p-3 leave-year-content"></div></details>`).appendTo(wrapper);
+			let loaded = false;
+			const load = () => {
+				if (section[0].open && !loaded) {
+					loaded = true;
+					load_leave_year(employee, year, section.find(".leave-year-content"))
+						.catch(() => { loaded = false; section.find(".leave-year-content").text(__("Unable to load leave history.")); });
+				}
+			};
+			section.on("toggle", load);
+			if (index === 0) { section[0].open = true; load(); }
+		});
+	} catch {
+		wrapper.text(__("Unable to load leave history."));
+	}
+}
+
+async function load_leave_year(employee, year, content) {
+	content.text(__("Loading leave history…"));
+	const {message} = await frappe.call({
+		method: "hr_custom.services.employee_profile.get_employee_leave_history", args: {employee, year},
+	});
+	content.html(render_history_table(
+		[__("Leave Type"), __("Unit"), __("Used"), __("Allocated"), __("Remaining")],
+		message.balances.map(row => `<tr><td>${history_cell(__(row.leave_type))}</td><td>${history_cell(__(row.unit))}</td>
+			<td>${history_cell(row.used)}</td><td>${history_cell(row.allocated)}</td><td><strong>${history_cell(row.remaining)}</strong></td></tr>`),
+		__("No leave balances for this year.")
+	));
+	content.append(`<label class="mb-3">${__("Leave Type")} <select class="form-control"></select></label>
+		<div class="leave-history-results"></div>`);
+	const results = content.find(".leave-history-results");
+	const type = content.find("select");
+	const rows = message.requests;
+	function render() {
+		const filtered = rows.filter(row => !type.val() || row.leave_type === type.val());
+		results.html(render_history_table(
+			[__("Request"), __("Leave Type"), __("From Date"), __("To Date"), __("Amount"), __("Status")],
+			filtered.map(row => {
+				const amount = row.custom_leave_unit === "Hours"
+					? __("{0} hours", [row.custom_leave_hours]) : __("{0} days", [row.total_leave_days]);
+				const status = row.docstatus === 2 ? "Cancelled" : row.status === "Open" ? "Pending" : row.status;
+				return `<tr><td><a href="/app/leave-application/${encodeURIComponent(row.name)}">${history_cell(row.name)}</a></td>
+					<td>${history_cell(row.leave_type)}</td><td>${history_cell(frappe.datetime.str_to_user(row.from_date))}</td>
+					<td>${history_cell(frappe.datetime.str_to_user(row.to_date))}</td><td>${history_cell(amount)}</td>
+					<td>${history_cell(__(status))}</td></tr>`;
+			}), __("No leave requests match these filters.")
+		));
+	}
+	type.append(new Option(__("All Leave Types"), ""));
+	for (const leaveType of [...new Set(rows.map(row => row.leave_type))].sort()) {
+		type.append(new Option(__(leaveType), leaveType));
+	}
+	type.on("change", render);
+	render();
+}
 
 function sync_arabic_full_name(frm) {
 	const fullName = [frm.doc.custom_first_name_ar, frm.doc.custom_middle_name_ar, frm.doc.custom_last_name_ar]

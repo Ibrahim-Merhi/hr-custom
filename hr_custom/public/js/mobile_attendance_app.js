@@ -424,7 +424,7 @@ frappe.ready(() => {
 		container.innerHTML = `<div class="history-loading">${__("Loading attendance details…")}</div>`;
 		try {
 			const data = await api("hr_custom.api.attendance_detail_v2.get_attendance_detail", {attendance_date: date});
-			const field = (label, value) => `<div class="leave-detail-field"><span>${label}</span><strong>${frappe.utils.escape_html(String(value || "—"))}</strong></div>`;
+			const field = (label, value) => `<div class="leave-detail-field"><span>${frappe.utils.escape_html(label)}</span><strong>${frappe.utils.escape_html(String(value || "—"))}</strong></div>`;
 			const attendance = data.attendance || {};
 			const schedule = data.schedule || {};
 			const workPeriod = schedule.from_time && schedule.to_time ? `${portalTime(String(schedule.from_time))} – ${portalTime(String(schedule.to_time))}` : "—";
@@ -537,6 +537,12 @@ frappe.ready(() => {
 			const field = (label, value) => `<div class="leave-detail-field"><span>${label}</span><strong>${frappe.utils.escape_html(String(value || "—"))}</strong></div>`;
 			container.innerHTML = field(__("Employee"), row.employee_name || row.employee) + field(__("Dates"), `${portalDate(row.from_date)} – ${portalDate(row.to_date)}`) + field(__("Amount"), `${formatNumber(row.custom_leave_unit === "Hours" ? row.custom_leave_hours : row.total_leave_days)} ${__(row.custom_leave_unit === "Hours" ? "hours" : "days")}`) + field(__("Status"), __(row.stage || row.status)) + field(__("Reason"), row.description) + (row.hr_override_note ? field(__("HR Override Note"), row.hr_override_note) : "") + `<div class="leave-detail-field"><span>${__("Approval Progress")}</span>${(row.steps || []).map((step) => `<div class="approval-step"><strong>${frappe.utils.escape_html(isArabic ? (step.approver_name_ar || step.approver_name || step.approver) : (step.approver_name || step.approver))}</strong><b>${frappe.utils.escape_html(__(step.status))}</b></div>`).join("") || `<strong>${__("No approval steps")}</strong>`}</div>`;
 			byId("leave-detail-actions").classList.toggle("is-hidden", !(allowAction && context.can_act));
+			if (row.leave_periods?.length) {
+				setText("leave-detail-title", __("Mixed Leave Request"));
+				container.insertAdjacentHTML("afterbegin", row.leave_periods.map(period =>
+					field(__(period.leave_type), `${portalDate(period.from_date)} – ${portalDate(period.to_date)}`)
+				).join(""));
+			}
 			byId("reject-leave").classList.toggle("is-hidden", Boolean(context.is_hr_override));
 			byId("leave-owner-actions").classList.toggle("is-hidden", !(row.can_edit || row.can_withdraw));
 			byId("edit-leave-request").classList.toggle("is-hidden", !row.can_edit);
@@ -1022,6 +1028,8 @@ frappe.ready(() => {
 		const isEdit = Boolean(editRow?.name);
 		editingLeaveName = isEdit ? editRow.name : null;
 		byId("simple-leave-form").reset();
+		byId("split-leave-periods").replaceChildren();
+		updateSplitLeaveFields();
 		const today = moment().format("YYYY-MM-DD");
 		byId("leave-from-date").value = isEdit ? moment(editRow.from_date).format("YYYY-MM-DD") : today;
 		byId("leave-to-date").value = isEdit ? moment(editRow.to_date).format("YYYY-MM-DD") : byId("leave-from-date").value;
@@ -1085,8 +1093,52 @@ frappe.ready(() => {
 		byId("leave-reason").required = !annualLeave;
 		setText("leave-reason-label", annualLeave ? __("Reason (optional for annual leave)") : __("Reason"));
 		updateHourlyFields();
+		updateSplitLeaveFields();
+	}
+	function updateSplitLeaveFields() {
+		const checkbox = byId("split-leave-enabled");
+		const available = !editingLeaveName && byId("leave-unit").value === "Days";
+		byId("split-leave-toggle").classList.toggle("is-hidden", !available);
+		if (!available) checkbox.checked = false;
+		const active = checkbox.checked;
+		const periods = byId("split-leave-periods");
+		if (active && !periods.children.length) addSplitLeavePeriod();
+		for (const select of periods.querySelectorAll("select")) populateSplitLeaveTypes(select);
+		byId("split-leave-fields").classList.toggle("is-hidden", !active);
+		for (const control of periods.querySelectorAll("select, input")) {
+			control.disabled = !active;
+			control.required = active;
+		}
+		byId("half-day-field").classList.toggle("is-hidden", active || byId("leave-unit").value === "Hours");
+		scheduleLeavePreview();
+	}
+	function populateSplitLeaveTypes(select) {
+		const previous = select.value;
+		select.replaceChildren(new Option(__("Select Leave Type"), ""));
+		for (const option of byId("leave-type").options) {
+			if (option.dataset.unit === "Days") select.append(option.cloneNode(true));
+		}
+		if ([...select.options].some(option => option.value === previous)) select.value = previous;
+	}
+	function addSplitLeavePeriod() {
+		const periods = byId("split-leave-periods");
+		const row = document.createElement("div");
+		row.innerHTML = `<label>${__("Leave Type")}<select required></select></label>
+			<label>${__("Period Starts")}<input type="date" required></label>
+			<button type="button">${__("Remove Period")}</button>`;
+		populateSplitLeaveTypes(row.querySelector("select"));
+		row.querySelector("button").onclick = () => {
+			row.remove();
+			if (!periods.children.length) byId("split-leave-enabled").checked = false;
+			updateSplitLeaveFields();
+		};
+		periods.append(row);
 	}
 	async function previewLeave(previewSequence = ++leavePreviewSequence) {
+		if (byId("split-leave-enabled").checked) {
+			byId("leave-preview").classList.add("is-hidden");
+			return;
+		}
 		const fromDate = byId("leave-from-date").value;
 		const toDate = byId("leave-to-date").value;
 		if (!fromDate || !toDate || toDate < fromDate) return;
@@ -1142,16 +1194,24 @@ frappe.ready(() => {
 		message.className = "feedback";
 		message.textContent = __("Selecting your leave allocation and approver…");
 		try {
-			const method = editingLeaveName ? "update_pending_leave" : "submit_simple_leave";
+			const split = byId("split-leave-enabled").checked;
+			const method = split ? "submit_split_leave" : editingLeaveName ? "update_pending_leave" : "submit_simple_leave";
 			const args = {from_date: byId("leave-from-date").value, to_date: byId("leave-to-date").value, reason: byId("leave-reason").value, leave_type: byId("leave-type").value, leave_duration: byId("leave-duration").value, partial_hours: byId("leave-partial-hours").value, half_day: byId("leave-half-day").checked ? 1 : 0};
 			if (editingLeaveName) args.name = editingLeaveName;
+			if (split) {
+				args.additional_periods = JSON.stringify([...byId("split-leave-periods").children].map(row => ({
+					leave_type: row.querySelector("select").value,
+					from_date: row.querySelector("input").value,
+				})));
+				for (const key of ["leave_duration", "partial_hours", "half_day"]) delete args[key];
+			}
 			const result = await Promise.race([
 				api(`hr_custom.services.simple_leave.${method}`, args),
 				new Promise((_, reject) => setTimeout(() => reject(new Error(__("The leave request timed out. Please try again."))), 20000)),
 			]);
 			if (submissionSequence !== leaveSubmissionSequence) return;
 			const amount = result.leave_unit === "Hours" ? __("{0} hours", [result.leave_hours]) : __("{0} days", [result.leave_days]);
-			const successMessage = result.updated
+			const successMessage = split ? __("Mixed leave request {0} sent for approval.", [result.name]) : result.updated
 				? __("Leave request updated and returned to the first approver.")
 				: __("Leave request {0} for {1} sent to {2} approver(s). Return to work: {3}.", [result.name, amount, formatNumber(result.approver_count), portalDate(result.return_to_work_date, {day: "numeric", month: "long", year: "numeric"})]);
 			byId("simple-leave-form").reset();
@@ -1532,6 +1592,8 @@ frappe.ready(() => {
 	}, {passive: true});
 	byId("leave-balance-card").addEventListener("toggle", (event) => { if (event.target.open) loadLeaves(); });
 	byId("open-leave-request").onclick = openLeaveRequest;
+	byId("split-leave-enabled").addEventListener("change", updateSplitLeaveFields);
+	byId("add-split-period").addEventListener("click", addSplitLeavePeriod);
 	byId("leave-sheet-close").onclick = closeLeaveRequest;
 	byId("leave-sheet").addEventListener("click", (event) => { if (event.target === byId("leave-sheet")) closeLeaveRequest(); });
 	byId("leave-from-date").addEventListener("change", () => { resetLeaveSubmitState(); const partial = byId("leave-unit").value === "Hours" && byId("leave-duration").value === "Partial Hours"; if (partial || !byId("leave-to-date").value || byId("leave-to-date").value < byId("leave-from-date").value) byId("leave-to-date").value = byId("leave-from-date").value; byId("leave-to-date").min = byId("leave-from-date").value; });
